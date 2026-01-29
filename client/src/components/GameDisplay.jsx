@@ -4,9 +4,10 @@ import { formatGameClock } from '../utils/gameSimulation'
 import logger from '../utils/logger'
 import './GameDisplay.css'
 
-function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplete, savedGameState, saveKey }) {
+function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, onDone, savedGameState, saveKey }) {
   const [gameState, setGameState] = useState(null)
   const [currentPlay, setCurrentPlay] = useState(null)
+  const [prePlayState, setPrePlayState] = useState(null) // Snapshot before play executes
   const [isSimulating, setIsSimulating] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
 
@@ -14,6 +15,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
   const [animationPhase, setAnimationPhase] = useState('idle') // 'idle', 'running', 'result', 'touchdown'
   const [runningText, setRunningText] = useState('')
   const animationRef = useRef(null)
+  const isPausedRef = useRef(isPaused)
+
+  // Keep isPausedRef in sync with isPaused state
+  useEffect(() => {
+    isPausedRef.current = isPaused
+  }, [isPaused])
 
   useEffect(() => {
     // Initialize game when component mounts - either from saved state or fresh
@@ -50,19 +57,33 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
     }
   }, [gameState, game, saveKey])
 
+  // Cancel animations when paused
+  useEffect(() => {
+    if (isPaused && animationRef.current) {
+      clearTimeout(animationRef.current)
+    }
+  }, [isPaused])
+
   useEffect(() => {
     if (!isSimulating || !gameState || isGameOver(gameState) || isPaused || animationPhase !== 'idle') {
       if (gameState && isGameOver(gameState)) {
         logger.info('Game complete!')
-        if (onGameComplete) {
-          setTimeout(() => onGameComplete(gameState), 2000)
-        }
+        // Don't auto-return - let user choose via buttons
       }
       return
     }
 
     // Execute next play after pause
     const timer = setTimeout(() => {
+      // Capture pre-play state for display during animation
+      const prePlay = {
+        down: gameState.down,
+        distance: gameState.distance,
+        yardline: gameState.yardline,
+        playNumber: gameState.playNumber + 1 // Will be incremented by executePlay
+      }
+      setPrePlayState(prePlay)
+
       const playResult = executePlay(gameState)
       setCurrentPlay(playResult)
 
@@ -71,50 +92,65 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
         animateRunningPlay(playResult, gameState)
       } else {
         // Non-running play or no steps, show result directly
-        setGameState(prevState => ({ ...prevState }))
+        // Deep copy to ensure React sees the change
+        const newState = JSON.parse(JSON.stringify(gameState))
+        setGameState(newState)
         setAnimationPhase('result')
 
-        // After showing result, return to idle
+        // After showing result, return to idle and clear prePlayState
         animationRef.current = setTimeout(() => {
+          if (isPausedRef.current) return
+          setPrePlayState(null)
           setAnimationPhase('idle')
         }, pauseDuration * 1000)
       }
     }, pauseDuration * 1000)
 
     return () => clearTimeout(timer)
-  }, [isSimulating, gameState, pauseDuration, isPaused, animationPhase, onGameComplete])
+  }, [isSimulating, gameState, pauseDuration, isPaused, animationPhase])
 
-  function animateRunningPlay(playResult, currentGameState) {
+  function animateRunningPlay(playResult, mutatedGameState) {
     setAnimationPhase('running')
     const steps = playResult.steps
     let stepIndex = 0
 
-    // Animation speed: 1 second per yard, or 100ms in fast mode
-    const stepDelay = pauseDuration < 1 ? 100 : 1000
+    // Animation speed: 0.5 second per yard, or 50ms in fast mode
+    const stepDelay = pauseDuration < 1 ? 50 : 500
 
     function showNextStep() {
+      // Check if paused before each step
+      if (isPausedRef.current) {
+        return // Stop animation, will resume when unpaused
+      }
+
       if (stepIndex < steps.length) {
         const yardsText = steps.slice(0, stepIndex + 1).map(y => `...${y}`).join(' ')
         setRunningText(`Running ${yardsText}`)
         stepIndex++
         animationRef.current = setTimeout(showNextStep, stepDelay)
       } else {
-        // Animation complete, show result and force re-render with fresh state copy
-        setGameState(prevState => ({ ...prevState }))
+        // Animation complete - create deep copy of mutated state to trigger React update
+        const newState = JSON.parse(JSON.stringify(mutatedGameState))
+        setGameState(newState)
         setAnimationPhase('result')
 
         // Check for touchdown
         if (playResult.touchdown) {
           animationRef.current = setTimeout(() => {
+            if (isPausedRef.current) return
             setAnimationPhase('touchdown')
             // Touchdown pause is 5x normal
             animationRef.current = setTimeout(() => {
+              if (isPausedRef.current) return
+              setPrePlayState(null)
               setAnimationPhase('idle')
             }, pauseDuration * 5 * 1000)
           }, 500)
         } else {
-          // Normal pause after result
+          // Normal pause after result, then clear prePlayState
           animationRef.current = setTimeout(() => {
+            if (isPausedRef.current) return
+            setPrePlayState(null)
             setAnimationPhase('idle')
           }, pauseDuration * 1000)
         }
@@ -132,10 +168,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
 
   // Determine what to show in play result area
   function getPlayDisplay() {
+    const playNum = prePlayState?.playNumber || gameState.playNumber
+
     if (animationPhase === 'running') {
       return (
         <div className="play-result">
-          <div className="play-number">Play #{gameState.playNumber}</div>
+          <div className="play-number">Play #{playNum}</div>
           <div className="play-description running-animation">{runningText}</div>
         </div>
       )
@@ -144,8 +182,11 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
     if (animationPhase === 'touchdown') {
       return (
         <div className="play-result touchdown-display">
-          <div className="play-number">Play #{gameState.playNumber}</div>
+          <div className="play-number">Play #{playNum}</div>
           <div className="touchdown-text">TOUCHDOWN!</div>
+          <div className="xp-result">
+            {currentPlay?.xpGood ? 'XP Good!' : 'XP No Good'}
+          </div>
           <div className="play-description">{currentPlay?.description}</div>
         </div>
       )
@@ -154,7 +195,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
     if ((animationPhase === 'result' || animationPhase === 'idle') && currentPlay) {
       return (
         <div className="play-result">
-          <div className="play-number">Play #{gameState.playNumber}</div>
+          <div className="play-number">Play #{playNum}</div>
           <div className="play-description">{currentPlay.description}</div>
           {currentPlay.turnover && <div className="turnover">TURNOVER!</div>}
         </div>
@@ -192,8 +233,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
             <input
               type="radio"
               name="pause"
-              value={0.1}
-              checked={pauseDuration === 0.1}
+              value={0.05}
+              checked={pauseDuration === 0.05}
               onChange={(e) => onPauseDurationChange(Number(e.target.value))}
             />
             I'm going fast again!
@@ -219,25 +260,39 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onGameComplet
         </div>
       </div>
 
-      {/* Field Position */}
+      {/* Field Position - show pre-play state during animation, otherwise current state */}
       <div className="field-position">
         <div className="possession-indicator">
           {gameState.possession === 'home' ? '▶' : '◀'} {gameState.possession === 'home' ? gameState.homeTeam.name : gameState.awayTeam.name}
         </div>
         <div className="down-distance">
-          {gameState.down}{getOrdinal(gameState.down)} & {gameState.distance} at {formatFieldPosition(gameState.yardline)}
+          {prePlayState && animationPhase !== 'idle' ? (
+            // During play animation, show where we started
+            <>{prePlayState.down}{getOrdinal(prePlayState.down)} & {prePlayState.distance} at {formatFieldPosition(prePlayState.yardline)}</>
+          ) : (
+            // When idle, show current state
+            <>{gameState.down}{getOrdinal(gameState.down)} & {gameState.distance} at {formatFieldPosition(gameState.yardline)}</>
+          )}
         </div>
       </div>
 
       {/* Current Play Result */}
       {getPlayDisplay()}
 
-      {/* Game Status */}
+      {/* Game Over */}
       {isGameOver(gameState) && (
         <div className="game-over">
           <h2>GAME OVER</h2>
           <div className="final-score">
             {gameState.homeTeam.name} {gameState.score.home} - {gameState.awayTeam.name} {gameState.score.away}
+          </div>
+          <div className="game-over-buttons">
+            <button className="next-game-btn" onClick={() => onNextGame && onNextGame(gameState)}>
+              Continue to Next Game
+            </button>
+            <button className="done-btn" onClick={() => onDone && onDone(gameState)}>
+              Done for Now
+            </button>
           </div>
         </div>
       )}

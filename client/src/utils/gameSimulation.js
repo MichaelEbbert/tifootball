@@ -35,15 +35,18 @@ export function generatePlayTime() {
 
 /**
  * Running algorithm from original 1979 game
- * Player picks 1-4, computer picks 1-5
+ * Player picks 1-4, computer picks 1-5 (or 1-4 on 4th and 1)
  * Match = tackled, no match = advance 1 yard and repeat
  *
- * @returns {number} Yards gained (can be negative on immediate tackle)
+ * @param {Object} options - Optional parameters
+ * @param {boolean} options.fourthAndOne - If true, use 1-4 vs 1-4 for first yard (75% conversion)
+ * @returns {Object} { yards, steps } - Yards gained and step-by-step progression
  */
-export function runningPlay() {
+export function runningPlay(options = {}) {
   // DEBUG: Short circuit for testing touchdowns
   // return { yards: 15, steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }
 
+  const { fourthAndOne = false } = options
   let yards = 0
   let tackled = false
   const steps = []  // Track each yard advanced
@@ -51,9 +54,18 @@ export function runningPlay() {
   while (!tackled) {
     const playerChoice = Math.floor(Math.random() * 4) + 1  // 1-4
 
-    // After gaining 6 yards, defense range expands to 1-7 (harder to tackle)
-    // This nudges average from 3.7 to ~4.4 yards per carry (closer to NFL's 4.4)
-    const defenseRange = yards >= 6 ? 7 : 5
+    // Defense range varies by situation:
+    // - 4th and 1 (first yard only): 1-4 (25% tackle = 75% conversion)
+    // - Normal (0-5 yards): 1-5 (20% tackle = 80% per yard)
+    // - After 6 yards: 1-7 (harder to break long runs)
+    let defenseRange
+    if (yards === 0 && fourthAndOne) {
+      defenseRange = 4  // Tighter coverage on 4th and 1
+    } else if (yards >= 6) {
+      defenseRange = 7  // Defense closes in on long runs
+    } else {
+      defenseRange = 5  // Normal
+    }
     const computerChoice = Math.floor(Math.random() * defenseRange) + 1
 
     if (playerChoice === computerChoice) {

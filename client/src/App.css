@@ -71,8 +71,31 @@ h1 {
 }
 
 .saved-game-info {
+  margin: 20px 0;
+}
+
+.saved-game-header {
+  font-size: 1.1em;
+  color: #aaa;
+  margin-bottom: 10px;
+}
+
+.saved-game-score {
+  font-size: 1.8em;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.saved-game-status {
   font-size: 1.3em;
-  margin: 15px 0;
+  color: #ffcc00;
+  margin-bottom: 8px;
+}
+
+.saved-game-possession {
+  font-size: 1.1em;
+  color: #00ff00;
 }
 
 .saved-game-buttons {

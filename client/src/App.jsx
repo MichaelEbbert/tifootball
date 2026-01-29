@@ -73,8 +73,19 @@ function App() {
     setGameInProgress(true)
   }
 
-  function handleGameComplete(finalGameState) {
-    logger.info('Game completed, returning to home screen')
+  function handleNextGame(finalGameState) {
+    logger.info('Game completed, continuing to next game')
+    localStorage.removeItem(SAVED_GAME_KEY)
+    setSavedGameState(null)
+    setGameInProgress(false)
+    setCurrentGame(null)
+    // TODO: Save game results to database
+    // Refresh data to get next game
+    fetchData()
+  }
+
+  function handleDone(finalGameState) {
+    logger.info('Game completed, done for now')
     localStorage.removeItem(SAVED_GAME_KEY)
     setSavedGameState(null)
     setGameInProgress(false)
@@ -108,7 +119,8 @@ function App() {
           game={currentGame}
           pauseDuration={pauseDuration}
           onPauseDurationChange={setPauseDuration}
-          onGameComplete={handleGameComplete}
+          onNextGame={handleNextGame}
+          onDone={handleDone}
           savedGameState={savedGameState?.gameState}
           saveKey={SAVED_GAME_KEY}
         />
@@ -124,11 +136,22 @@ function App() {
       {savedGameState && (
         <div className="saved-game">
           <h2>Game In Progress</h2>
-          <p className="saved-game-info">
-            {savedGameState.gameState.awayTeam.name} {savedGameState.gameState.score.away} @ {savedGameState.gameState.homeTeam.name} {savedGameState.gameState.score.home}
-            <br />
-            Q{savedGameState.gameState.quarter} - {Math.floor(savedGameState.gameState.clock / 60)}:{(savedGameState.gameState.clock % 60).toString().padStart(2, '0')}
-          </p>
+          <div className="saved-game-info">
+            <div className="saved-game-header">
+              Game #{savedGameState.game.gameNumber}: {savedGameState.gameState.awayTeam.abbreviation} @ {savedGameState.gameState.homeTeam.abbreviation}
+            </div>
+            <div className="saved-game-score">
+              {savedGameState.gameState.awayTeam.name} {savedGameState.gameState.score.away} - {savedGameState.gameState.homeTeam.name} {savedGameState.gameState.score.home}
+            </div>
+            <div className="saved-game-status">
+              Q{savedGameState.gameState.quarter} - {Math.floor(savedGameState.gameState.clock / 60)}:{(savedGameState.gameState.clock % 60).toString().padStart(2, '0')}
+            </div>
+            <div className="saved-game-possession">
+              {savedGameState.gameState.possession === 'home'
+                ? savedGameState.gameState.homeTeam.name
+                : savedGameState.gameState.awayTeam.name}'s ball, {savedGameState.gameState.down}&{savedGameState.gameState.distance}
+            </div>
+          </div>
           <div className="saved-game-buttons">
             <button className="resume-game-btn" onClick={handleResumeGame}>
               Resume Game
@@ -161,8 +184,8 @@ function App() {
               <input
                 type="radio"
                 name="pause"
-                value={0.1}
-                checked={pauseDuration === 0.1}
+                value={0.05}
+                checked={pauseDuration === 0.05}
                 onChange={(e) => setPauseDuration(Number(e.target.value))}
               />
               I'm going fast again!

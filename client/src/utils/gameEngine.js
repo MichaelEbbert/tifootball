@@ -23,7 +23,8 @@ const GAME_CONSTANTS = {
   AIR_YARDS: { short: [5, 10], medium: [11, 20], long: [21, 40] },
 
   // Fumbles
-  FUMBLE_RATE: 0.02,
+  FUMBLE_RATE_RUN: 0.03,    // 3% on running plays
+  FUMBLE_RATE_PASS: 0.02,   // 2% after catch (for now)
   FUMBLE_RECOVERY_OFFENSE: 0.50,
 
   // Punts
@@ -247,14 +248,17 @@ function executeRun(gameState) {
   const stats = getStats(gameState, gameState.possession)
   stats.runningPlays++
 
-  const runResult = runningPlay()
+  // 4th and 1 uses tighter defense (1-4 vs 1-4 instead of 1-4 vs 1-5)
+  const isFourthAndOne = gameState.down === 4 && gameState.distance === 1
+  const runResult = runningPlay({ fourthAndOne: isFourthAndOne })
   const yards = runResult.yards
   const steps = runResult.steps
-  stats.runningYards += Math.max(0, yards)
+  stats.runningYards += yards
 
-  // Check for fumble
-  if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE) {
+  // Check for fumble on running play (3%)
+  if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_RUN) {
     if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
+      // Defense recovers - turnover
       stats.fumblesLost++
       logger.info(`💨 FUMBLE! ${gameState.possession} loses the ball`)
       return {
@@ -265,6 +269,18 @@ function executeRun(gameState) {
         turnover: true,
         description: `Run for ${yards} yards, FUMBLE, recovered by defense`
       }
+    } else {
+      // Offense recovers - no turnover but play ends
+      logger.info(`💨 FUMBLE! ${gameState.possession} recovers`)
+      updateDownAndDistance(gameState, yards)
+      return {
+        type: 'run',
+        yards: yards,
+        steps: steps,
+        fumble: true,
+        turnover: false,
+        description: `Run for ${yards} yards, FUMBLE, recovered by offense`
+      }
     }
   }
 
@@ -273,13 +289,22 @@ function executeRun(gameState) {
 
   updateDownAndDistance(gameState, yards)
 
-  return {
+  // Build result
+  const result = {
     type: 'run',
     yards: yards,
     steps: steps,
     touchdown: isTouchdown,
     description: yards >= 0 ? `Tackled for a gain of ${yards} yards` : `Tackled for a loss of ${Math.abs(yards)} yards`
   }
+
+  // Add XP result if touchdown
+  if (isTouchdown && gameState.lastXpResult !== undefined) {
+    result.xpGood = gameState.lastXpResult
+    delete gameState.lastXpResult // Clean up
+  }
+
+  return result
 }
 
 /**
@@ -326,9 +351,10 @@ function executePass(gameState) {
 
     stats.passYards += totalYards
 
-    // Check for fumble after catch
-    if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE) {
+    // Check for fumble after catch (2% for now, will use RAC fumble rate later)
+    if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_PASS) {
       if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
+        // Defense recovers - turnover
         stats.fumblesLost++
         return {
           type: 'pass',
@@ -337,6 +363,17 @@ function executePass(gameState) {
           fumble: true,
           turnover: true,
           description: `Pass complete for ${totalYards} yards, FUMBLE, recovered by defense`
+        }
+      } else {
+        // Offense recovers - no turnover but play ends
+        updateDownAndDistance(gameState, totalYards)
+        return {
+          type: 'pass',
+          yards: totalYards,
+          complete: true,
+          fumble: true,
+          turnover: false,
+          description: `Pass complete for ${totalYards} yards, FUMBLE, recovered by offense`
         }
       }
     }
@@ -449,6 +486,10 @@ function updateDownAndDistance(gameState, yards) {
     gameState.score[gameState.possession] += 6
     logger.info(`🏈 TOUCHDOWN! ${gameState.possession} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
+    // Attempt extra point (both modes now)
+    const xpGood = attemptExtraPoint(gameState)
+    gameState.lastXpResult = xpGood // Store for play result
+
     if (gameState.simplifiedMode) {
       // Simplified mode: no kickoff, other team starts at own 35
       gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
@@ -456,7 +497,6 @@ function updateDownAndDistance(gameState, yards) {
       gameState.down = 1
       gameState.distance = 10
     } else {
-      attemptExtraPoint(gameState)
       kickoff(gameState)
     }
     return
@@ -493,6 +533,7 @@ function updateDownAndDistance(gameState, yards) {
 
 /**
  * Attempt extra point after touchdown
+ * @returns {boolean} true if XP was made
  */
 function attemptExtraPoint(gameState) {
   const stats = getStats(gameState, gameState.possession)
@@ -501,6 +542,11 @@ function attemptExtraPoint(gameState) {
   if (Math.random() < GAME_CONSTANTS.XP_SUCCESS) {
     stats.xpMade++
     gameState.score[gameState.possession] += 1
+    logger.info(`✓ Extra point GOOD! Score: ${gameState.score.home}-${gameState.score.away}`)
+    return true
+  } else {
+    logger.info(`✗ Extra point MISSED! Score: ${gameState.score.home}-${gameState.score.away}`)
+    return false
   }
 }
 

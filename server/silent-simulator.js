@@ -28,11 +28,52 @@ const { runningPlay } = await import(gameSimPath)
 // Parse command line arguments
 const args = process.argv.slice(2)
 let numGames = 100
+let fourthDownTest = false
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--games' && args[i + 1]) {
     numGames = parseInt(args[i + 1], 10)
   }
+  if (args[i] === '--4th-down') {
+    fourthDownTest = true
+  }
+}
+
+// 4th down conversion probability test
+if (fourthDownTest) {
+  console.log(`\n🏈 4th Down Conversion Probability Test (Running Plays)`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+
+  const trials = 100000
+  const results = {
+    1: { attempts: 0, conversions: 0 },
+    2: { attempts: 0, conversions: 0 },
+    3: { attempts: 0, conversions: 0 },
+    4: { attempts: 0, conversions: 0 },
+    5: { attempts: 0, conversions: 0 }
+  }
+
+  console.log(`\nRunning ${trials.toLocaleString()} rushing plays per scenario...\n`)
+
+  for (let needed = 1; needed <= 5; needed++) {
+    for (let i = 0; i < trials; i++) {
+      // 4th and 1 uses tighter coverage (1-4 vs 1-4)
+      const { yards } = runningPlay({ fourthAndOne: needed === 1 })
+      results[needed].attempts++
+      if (yards >= needed) {
+        results[needed].conversions++
+      }
+    }
+  }
+
+  for (let needed = 1; needed <= 5; needed++) {
+    const pct = (results[needed].conversions / results[needed].attempts * 100).toFixed(1)
+    const note = needed === 1 ? ' (uses 1-4 vs 1-4)' : ''
+    console.log(`  4th and ${needed}: ${pct}% conversion rate${note}`)
+  }
+
+  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
+  process.exit(0)
 }
 
 // Mock team data
