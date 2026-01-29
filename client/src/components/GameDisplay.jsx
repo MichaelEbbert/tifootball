@@ -72,22 +72,53 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     logger.info('Viewing game summary')
   }
 
-  // Placeholder: Save game results to database
+  // Save game results to database
   async function saveGameResults(finalState) {
-    // TODO: POST to /api/games with game results
-    // - Update team wins/losses/ties
-    // - Save game stats
-    logger.info('TODO: Save game results to database')
-    logger.info(`  Final score: ${finalState.homeTeam.name} ${finalState.score.home} - ${finalState.awayTeam.name} ${finalState.score.away}`)
+    try {
+      const gameData = {
+        home_team: finalState.homeTeam.id,
+        away_team: finalState.awayTeam.id,
+        home_score: finalState.score.home,
+        away_score: finalState.score.away,
+        total_plays: finalState.playNumber,
+        stats: [
+          {
+            team: finalState.homeTeam.id,
+            rushing_yards: finalState.homeStats.rushingYards,
+            passing_yards: finalState.homeStats.passYards,
+            total_yards: finalState.homeStats.rushingYards + finalState.homeStats.passYards,
+            turnovers: finalState.homeStats.rushingFumblesLost + finalState.homeStats.recFumblesLost +
+                       finalState.homeStats.sackFumblesLost + finalState.homeStats.passInterceptions
+          },
+          {
+            team: finalState.awayTeam.id,
+            rushing_yards: finalState.awayStats.rushingYards,
+            passing_yards: finalState.awayStats.passYards,
+            total_yards: finalState.awayStats.rushingYards + finalState.awayStats.passYards,
+            turnovers: finalState.awayStats.rushingFumblesLost + finalState.awayStats.recFumblesLost +
+                       finalState.awayStats.sackFumblesLost + finalState.awayStats.passInterceptions
+          }
+        ],
+        scoring_log: finalState.scoringLog || []
+      }
 
-    // Determine winner
-    if (finalState.score.home > finalState.score.away) {
-      logger.info(`  Winner: ${finalState.homeTeam.name}`)
-    } else if (finalState.score.away > finalState.score.home) {
-      logger.info(`  Winner: ${finalState.awayTeam.name}`)
-    } else {
-      logger.info('  Result: Tie')
+      const response = await fetch('/api/games', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(gameData)
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        logger.info(`Game saved to database with ID: ${result.id}`)
+      } else {
+        logger.error('Failed to save game:', response.statusText)
+      }
+    } catch (error) {
+      logger.error('Error saving game:', error)
     }
+
+    logger.info(`Final score: ${finalState.homeTeam.name} ${finalState.score.home} - ${finalState.awayTeam.name} ${finalState.score.away}`)
   }
 
   // Keep refs in sync with state
@@ -395,6 +426,24 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               {gameState.homeTeam.name} {gameState.score.home} - {gameState.awayTeam.name} {gameState.score.away}
             </div>
           </div>
+
+          {/* Scoring Summary */}
+          {gameState.scoringLog && gameState.scoringLog.length > 0 && (
+            <div className="scoring-summary">
+              <h3>Scoring Summary</h3>
+              <div className="scoring-log">
+                {gameState.scoringLog.map((entry, index) => (
+                  <div key={index} className="scoring-entry">
+                    <span className="score-quarter">Q{entry.quarter}</span>
+                    <span className="score-time">{formatGameClock(entry.time_remaining)}</span>
+                    <span className="score-team">{entry.team_abbr}</span>
+                    <span className="score-desc">{entry.description}</span>
+                    <span className="score-total">{entry.home_score}-{entry.away_score}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="stats-container">

@@ -136,9 +136,10 @@ tifootball/
 │   └── vite.config.js         # Vite configuration
 ├── server/                    # Express backend
 │   ├── db/                    # SQLite database location
-│   ├── routes/                # API route handlers
-│   ├── models/                # Database models
-│   ├── index.js               # Server entry point
+│   ├── data/                  # JSON data files (teams, names)
+│   ├── index.js               # Server entry point with all routes
+│   ├── seed.js                # Database seeding script
+│   ├── silent-simulator.js    # Headless game simulator
 │   └── package.json           # Server dependencies
 ├── .gitignore                 # Git ignore rules
 ├── CLAUDE.md                  # Development notes (this file)
@@ -151,7 +152,7 @@ tifootball/
 
 **Client (React + Vite):**
 - `package.json` - React 18.3.1, Vite 6.0.5
-- `vite.config.js` - Port 3000, proxy to API on 3001
+- `vite.config.js` - Port 3000, proxy to API on 3002
 - `index.html` - Entry point
 - `src/main.jsx` - React bootstrap
 - `src/App.jsx` - Main component with game state
@@ -159,11 +160,11 @@ tifootball/
 - `src/App.css` - Scoreboard and game display styles
 
 **Server (Express + SQLite):**
-- `package.json` - Express, better-sqlite3, cors
+- `package.json` - Express, sql.js, cors
 - `index.js` - API server with routes and database setup
-  - Database schema: `games` and `game_stats` tables
-  - REST endpoints: GET /api/games, POST /api/games
-  - Runs on port 3001
+  - Database schema: `teams`, `coaches`, `games`, `game_stats`, `schedule`, `scoring_log` tables
+  - REST endpoints for teams, coaches, games, schedule
+  - Runs on port 3002
 
 **Documentation:**
 - `README.md` - Setup instructions and project overview
@@ -209,7 +210,7 @@ tifootball/
 - id (AUTO INCREMENT PRIMARY KEY)
 - team_id (FOREIGN KEY to teams)
 - last_name (randomly selected from surnames)
-- first_name (optional, currently NULL)
+- first_name (randomly generated from firstnames.json)
 - hired_date (timestamp)
 
 ### API Endpoints
@@ -280,7 +281,7 @@ Sources:
 - Gain 5+ yards: 32.8%
 
 **Run After Catch (RAC):**
-- Uses same 1-4 vs 1-5 algorithm
+- Uses same algorithm as running plays (including breakaway mechanic)
 - No negative yards (already have possession)
 - Adds yards to completed pass distance
 
@@ -351,8 +352,10 @@ Then refresh the page.
 10. ✅ Add TOUCHDOWN! display with extended pause
 11. ✅ Add localStorage auto-save for game persistence
 12. ✅ Create Silent Simulator for statistics research
-13. Implement pass/kick probability tables
-14. Add extra points after touchdowns
+13. ✅ Implement pass/kick probability tables
+14. ✅ Add extra points after touchdowns
+15. ✅ Add sacks with variable rates by pass type
+16. ✅ Add scoring log for newspaper-style game summaries
 
 ## Silent Simulator
 
@@ -418,3 +421,23 @@ The original 1979 algorithm (1-4 vs 1-5) produced 3.7 yards per carry. To match 
 **Result:** 4.52 yards per carry (verified via Silent Simulator with 10,000+ games)
 
 This gives slightly above-NFL average, making for exciting games while staying realistic.
+
+## TODO / Future Enhancements
+
+> **Note:** When Michael is ready to address these he'll tell me something like "ok let's work on the todos". If not, I should remind him every couple weeks.
+
+### Scoring & Special Teams
+- [ ] Kick return touchdowns (currently returns don't check for 95+ yard TD)
+- [ ] Punt return touchdowns
+- [ ] Interception return touchdowns
+- [ ] Fumble return touchdowns
+- [ ] Blocked punt touchdowns
+
+### Defensive Tactics
+- [ ] Blitzing (higher sack rate, higher big play risk)
+- [ ] Coverage schemes affecting pass completion rates
+
+### Coach AI
+- [ ] Use coach_play_tendencies table for play calling
+- [ ] Use coach_fourth_down_tendencies for 4th down decisions
+- [ ] Use coach_red_zone_tendencies in red zone

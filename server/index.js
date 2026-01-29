@@ -107,6 +107,26 @@ async function initDatabase() {
     )
   `)
 
+  // Scoring log for newspaper-style game summaries
+  db.run(`
+    CREATE TABLE IF NOT EXISTS scoring_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id INTEGER NOT NULL,
+      quarter INTEGER NOT NULL,
+      time_remaining INTEGER NOT NULL,
+      team_id INTEGER NOT NULL,
+      score_type TEXT NOT NULL,
+      play_type TEXT,
+      yards INTEGER,
+      extra_point TEXT,
+      home_score INTEGER NOT NULL,
+      away_score INTEGER NOT NULL,
+      description TEXT,
+      FOREIGN KEY (game_id) REFERENCES games(id),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )
+  `)
+
   saveDatabase()
 }
 
@@ -253,7 +273,7 @@ app.get('/api/games', (req, res) => {
 })
 
 app.post('/api/games', (req, res) => {
-  const { home_team, away_team, home_score, away_score, total_plays, stats } = req.body
+  const { home_team, away_team, home_score, away_score, total_plays, stats, scoring_log } = req.body
 
   const result = runSql(
     'INSERT INTO games (home_team_id, away_team_id, home_score, away_score, total_plays) VALUES (?, ?, ?, ?, ?)',
@@ -271,7 +291,31 @@ app.post('/api/games', (req, res) => {
     })
   }
 
+  // Insert scoring log entries
+  if (scoring_log && scoring_log.length > 0) {
+    scoring_log.forEach(entry => {
+      runSql(
+        `INSERT INTO scoring_log (game_id, quarter, time_remaining, team_id, score_type, play_type, yards, extra_point, home_score, away_score, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [gameId, entry.quarter, entry.time_remaining, entry.team_id, entry.score_type, entry.play_type, entry.yards, entry.extra_point, entry.home_score, entry.away_score, entry.description]
+      )
+    })
+  }
+
   res.json({ id: gameId, message: 'Game saved successfully' })
+})
+
+// Get scoring log for a game
+app.get('/api/games/:id/scoring', (req, res) => {
+  const gameId = parseInt(req.params.id)
+  const scoringLog = queryAll(`
+    SELECT sl.*, t.abbreviation as team_abbr, t.name as team_name
+    FROM scoring_log sl
+    JOIN teams t ON sl.team_id = t.id
+    WHERE sl.game_id = ?
+    ORDER BY sl.id
+  `, [gameId])
+  res.json(scoringLog)
 })
 
 // Initialize database and start server

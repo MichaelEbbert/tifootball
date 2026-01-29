@@ -101,6 +101,7 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
     // Play tracking
     playNumber: 0,
     playLog: [],
+    scoringLog: [],  // Newspaper-style scoring summary
 
     // Stats - Home Team
     homeStats: {
@@ -193,6 +194,46 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
  */
 function getStats(gameState, team) {
   return team === 'home' ? gameState.homeStats : gameState.awayStats
+}
+
+/**
+ * Add a scoring entry to the game log
+ * @param {Object} gameState - Current game state
+ * @param {string} scoreType - 'TD', 'FG', 'SAFETY'
+ * @param {string} playType - 'run', 'pass', 'kick_return', 'punt_return', 'int_return', 'fumble_return'
+ * @param {number} yards - Yards on the scoring play
+ * @param {string} extraPoint - 'good', 'no_good', '2pt_good', '2pt_no_good', or null
+ * @param {string} scoringTeam - 'home' or 'away'
+ */
+function addScoringEntry(gameState, scoreType, playType, yards, extraPoint, scoringTeam) {
+  const team = scoringTeam === 'home' ? gameState.homeTeam : gameState.awayTeam
+
+  let description
+  if (scoreType === 'TD') {
+    const xpText = extraPoint === 'good' ? 'kick good' :
+                   extraPoint === 'no_good' ? 'kick failed' :
+                   extraPoint === '2pt_good' ? '2pt good' :
+                   extraPoint === '2pt_no_good' ? '2pt failed' : ''
+    description = `TD ${yards} yard ${playType} (${xpText})`
+  } else if (scoreType === 'FG') {
+    description = `FG ${yards} yards`
+  } else if (scoreType === 'SAFETY') {
+    description = 'Safety'
+  }
+
+  gameState.scoringLog.push({
+    quarter: gameState.quarter,
+    time_remaining: gameState.clock,
+    team_id: team.id,
+    team_abbr: team.abbreviation,
+    score_type: scoreType,
+    play_type: playType,
+    yards: yards,
+    extra_point: extraPoint,
+    home_score: gameState.score.home,
+    away_score: gameState.score.away,
+    description: description
+  })
 }
 
 /**
@@ -368,6 +409,7 @@ function executeRun(gameState) {
 
   // Check if this will be a touchdown before updating
   const isTouchdown = gameState.yardline + yards >= 100
+  const scoringTeam = gameState.possession  // Capture before possession might change
   if (isTouchdown) {
     stats.rushingTouchdowns++
   }
@@ -383,9 +425,10 @@ function executeRun(gameState) {
     description: yards >= 0 ? `Tackled for a gain of ${yards} yards` : `Tackled for a loss of ${Math.abs(yards)} yards`
   }
 
-  // Add XP result if touchdown
+  // Add XP result and scoring log if touchdown
   if (isTouchdown && gameState.lastXpResult !== undefined) {
     result.xpGood = gameState.lastXpResult
+    addScoringEntry(gameState, 'TD', 'run', yards, gameState.lastXpResult ? 'good' : 'no_good', scoringTeam)
     delete gameState.lastXpResult // Clean up
   }
 
@@ -535,6 +578,7 @@ function executePass(gameState, forcedType = null) {
 
     // Check for passing touchdown before updating
     const isTouchdown = gameState.yardline + totalYards >= 100
+    const scoringTeam = gameState.possession  // Capture before possession might change
     if (isTouchdown) {
       stats.passTouchdowns++
     }
@@ -547,7 +591,7 @@ function executePass(gameState, forcedType = null) {
       racSteps.push(airYards + i)
     }
 
-    return {
+    const result = {
       type: 'pass',
       passType: passType,
       yards: totalYards,
@@ -555,8 +599,18 @@ function executePass(gameState, forcedType = null) {
       racYards: racYards,
       racSteps: racSteps,
       complete: true,
+      touchdown: isTouchdown,
       description: `Pass complete for ${totalYards} yards (${airYards} air, ${racYards} RAC)`
     }
+
+    // Add XP result and scoring log if touchdown
+    if (isTouchdown && gameState.lastXpResult !== undefined) {
+      result.xpGood = gameState.lastXpResult
+      addScoringEntry(gameState, 'TD', 'pass', totalYards, gameState.lastXpResult ? 'good' : 'no_good', scoringTeam)
+      delete gameState.lastXpResult
+    }
+
+    return result
   } else {
     // Incomplete pass
     updateDownAndDistance(gameState, 0)
@@ -623,8 +677,12 @@ function executeFieldGoal(gameState) {
 
   if (Math.random() < successRate) {
     stats.fgMade++
+    const scoringTeam = gameState.possession
     gameState.score[gameState.possession] += 3
-    logger.info(`🎯 Field goal GOOD! ${fgDistance} yards. Score: ${gameState.score.home}-${gameState.score.away}`)
+    logger.info(`Field goal GOOD! ${fgDistance} yards. Score: ${gameState.score.home}-${gameState.score.away}`)
+
+    // Add scoring entry
+    addScoringEntry(gameState, 'FG', 'kick', fgDistance, null, scoringTeam)
 
     return {
       type: 'fieldgoal',
@@ -678,6 +736,8 @@ function updateDownAndDistance(gameState, yards) {
   if (gameState.yardline <= 0) {
     const defense = gameState.possession === 'home' ? 'away' : 'home'
     gameState.score[defense] += 2
+    // Add scoring entry for the defense
+    addScoringEntry(gameState, 'SAFETY', 'tackle', 0, null, defense)
     changePossession(gameState, 20) // Free kick from 20
     return
   }

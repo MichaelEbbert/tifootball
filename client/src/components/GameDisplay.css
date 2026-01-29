@@ -547,3 +547,67 @@
 .stat-line span:last-child {
   color: #1a1a1a;
 }
+
+/* Scoring Summary */
+.scoring-summary {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  font-family: 'Courier New', monospace;
+}
+
+.scoring-summary h3 {
+  color: #00ff00;
+  margin: 0 0 15px 0;
+  font-size: 1.2em;
+  border-bottom: 2px solid #00ff00;
+  padding-bottom: 10px;
+}
+
+.scoring-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scoring-entry {
+  display: flex;
+  gap: 15px;
+  color: #ccc;
+  font-size: 0.95em;
+  padding: 5px 0;
+  border-bottom: 1px solid #333;
+}
+
+.scoring-entry:last-child {
+  border-bottom: none;
+}
+
+.score-quarter {
+  color: #888;
+  width: 30px;
+}
+
+.score-time {
+  color: #888;
+  width: 50px;
+}
+
+.score-team {
+  color: #00ff00;
+  font-weight: bold;
+  width: 40px;
+}
+
+.score-desc {
+  flex: 1;
+  color: #fff;
+}
+
+.score-total {
+  color: #ffcc00;
+  font-weight: bold;
+  width: 50px;
+  text-align: right;
+}
