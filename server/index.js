@@ -46,6 +46,20 @@ db.exec(`
     FOREIGN KEY (team_id) REFERENCES teams(id)
   );
 
+  CREATE TABLE IF NOT EXISTS schedule (
+    game_number INTEGER PRIMARY KEY,
+    week INTEGER NOT NULL,
+    game_date TEXT NOT NULL,
+    game_day TEXT NOT NULL,
+    away_team_id INTEGER NOT NULL,
+    home_team_id INTEGER NOT NULL,
+    simulated INTEGER DEFAULT 0,
+    game_id INTEGER,
+    FOREIGN KEY (away_team_id) REFERENCES teams(id),
+    FOREIGN KEY (home_team_id) REFERENCES teams(id),
+    FOREIGN KEY (game_id) REFERENCES games(id)
+  );
+
   CREATE TABLE IF NOT EXISTS games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     home_team_id INTEGER NOT NULL,
@@ -136,6 +150,42 @@ app.post('/api/coaches', (req, res) => {
 
 app.get('/api/surnames/random', (req, res) => {
   res.json({ surname: getRandomSurname() })
+})
+
+// Schedule routes
+app.get('/api/schedule/next', (req, res) => {
+  const nextGame = db.prepare(`
+    SELECT s.*,
+           away.city as away_city, away.name as away_name, away.abbreviation as away_abbr,
+           home.city as home_city, home.name as home_name, home.abbreviation as home_abbr
+    FROM schedule s
+    JOIN teams away ON s.away_team_id = away.id
+    JOIN teams home ON s.home_team_id = home.id
+    WHERE s.simulated = 0
+    ORDER BY s.game_number
+    LIMIT 1
+  `).get()
+
+  if (!nextGame) {
+    return res.status(404).json({ error: 'No unplayed games found' })
+  }
+
+  res.json(nextGame)
+})
+
+// Standings route
+app.get('/api/standings', (req, res) => {
+  // For now, return teams with 0-0 records
+  // Will be updated when we track game results
+  const standings = db.prepare(`
+    SELECT t.*, c.first_name as coach_first_name, c.last_name as coach_last_name,
+           0 as wins, 0 as losses, 0 as ties
+    FROM teams t
+    LEFT JOIN coaches c ON t.id = c.team_id
+    ORDER BY t.conference, t.division, t.name
+  `).all()
+
+  res.json(standings)
 })
 
 app.get('/api/games', (req, res) => {

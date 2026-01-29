@@ -241,12 +241,111 @@ Sources:
 - [FiveThirtyEight US Census Surnames Data](https://github.com/fivethirtyeight/data/blob/master/most-common-name/surnames.csv)
 - [US Census 2010 Surnames](https://www.census.gov/topics/population/genealogy/data/2010_surnames.html)
 
+## Game Simulation Logic
+
+### Time Management (Normal Distribution)
+
+**Play Duration:**
+- Mean: 28.6 seconds per play
+- Standard deviation: ~11 seconds
+- Distribution: Normal (bell curve) using Box-Muller transform
+- Clamped: 5-50 seconds (minimum play to full delay of game clock)
+- Calculation: 3,600 seconds (60 min) ÷ 126 average plays = 28.57s per play
+
+**Coverage:**
+- 68% of plays: 17-40 seconds
+- 95% of plays: 7-50 seconds
+- Outliers automatically clamped to 5-50 range
+
+### Running Algorithm (1979 Original Logic)
+
+**Tribute to original TI-99/4a game - NOT using bell curve**
+
+**Algorithm:**
+1. Player picks number 1-4 (simulated randomly)
+2. Computer picks number 1-5 (random)
+3. If match: Player is tackled
+   - On first match (behind line): lose 0-3 yards (random)
+   - After N advances: gain N yards
+4. If no match: Advance 1 yard, repeat
+
+**Probability Distribution:**
+- Expected value: 3.7 yards per carry
+- Loss (0-3 yards): 20%
+- Gain 1 yard: 16%
+- Gain 2 yards: 12.8%
+- Gain 3 yards: 10.2%
+- Gain 4 yards: 8.2%
+- Gain 5+ yards: 32.8%
+
+**Run After Catch (RAC):**
+- Uses same 1-4 vs 1-5 algorithm
+- No negative yards (already have possession)
+- Adds yards to completed pass distance
+
+### Implementation
+
+**File:** `client/src/utils/gameSimulation.js`
+
+**Functions:**
+- `generatePlayTime()` - Returns play duration in seconds (5-50)
+- `runningPlay()` - Returns yards gained on run (-3 to 20+)
+- `runAfterCatch()` - Returns additional yards after pass completion (0 to 20+)
+- `formatGameClock(seconds)` - Converts to MM:SS format
+
+**Constants:**
+- `QUARTERS = 4`
+- `QUARTER_LENGTH = 900` (15 minutes)
+- `TOTAL_GAME_TIME = 3600` (60 minutes)
+- `AVERAGE_PLAYS_PER_GAME = 126`
+- `AVERAGE_SECONDS_PER_PLAY = 28.6`
+
+## Logging System
+
+**File:** `client/src/utils/logger.js`
+
+### Log Levels (from most to least verbose):
+- **DEBUG**: Detailed debugging info (each play, calculations)
+- **INFO**: General information (game start, scores, turnovers) - DEFAULT
+- **WARN**: Warning messages
+- **ERROR**: Error messages only
+- **OFF**: Disable all logging
+
+### Usage in Code:
+```javascript
+import logger from './utils/logger'
+
+logger.debug('Detailed debug information')
+logger.info('General information')
+logger.warn('Warning message')
+logger.error('Error occurred')
+```
+
+### Change Log Level in Browser Console:
+```javascript
+localStorage.setItem('LOG_LEVEL', 'DEBUG')  // Show everything
+localStorage.setItem('LOG_LEVEL', 'INFO')   // Default
+localStorage.setItem('LOG_LEVEL', 'WARN')   // Warnings and errors only
+localStorage.setItem('LOG_LEVEL', 'ERROR')  // Errors only
+localStorage.setItem('LOG_LEVEL', 'OFF')    // Silent
+```
+Then refresh the page.
+
+### Current Logging:
+- **INFO**: Game initialization, touchdowns, field goals, turnovers
+- **DEBUG**: Every play execution with down/distance/field position
+- **ERROR**: API fetch errors, unexpected issues
+
 ### Next Steps:
 
-1. Install dependencies: `npm install` in both client/ and server/
-2. Run seed script: `cd server && npm run seed`
-3. Implement game simulation logic in client/src/utils/
-4. Create React components for scoreboard, play-by-play, stats
-5. Build running algorithm (1-4 vs 1-5 matching game)
-6. Implement pass/kick probability tables
-7. Add automated play sequencing with configurable delays
+1. ✅ Install dependencies: `npm install` in both client/ and server/
+2. ✅ Run seed script: `cd server && npm run seed`
+3. ✅ Implement game simulation logic in client/src/utils/
+4. ✅ Create home page with standings and "Begin Game" button
+5. ✅ Build running algorithm (1-4 vs 1-5 matching game)
+6. ✅ Create logging system with configurable levels
+7. ✅ Add pause control (1-5 seconds between plays)
+8. Wire up game simulation to UI
+9. Implement pass/kick probability tables
+10. Add automated play sequencing with configurable delays
+11. Create React components for play-by-play display
