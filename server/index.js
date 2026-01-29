@@ -3,6 +3,7 @@ import cors from 'cors'
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { readFileSync } from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -14,36 +15,127 @@ const PORT = 3001
 app.use(cors())
 app.use(express.json())
 
+// Load name data from JSON files
+const surnames = JSON.parse(
+  readFileSync(join(__dirname, 'data', 'surnames.json'), 'utf-8')
+)
+const firstNames = JSON.parse(
+  readFileSync(join(__dirname, 'data', 'firstnames.json'), 'utf-8')
+)
+
 // Initialize SQLite database
 const db = new Database(join(__dirname, 'db', 'tifootball.db'))
 
 // Create tables if they don't exist
 db.exec(`
+  CREATE TABLE IF NOT EXISTS teams (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    city TEXT NOT NULL,
+    abbreviation TEXT NOT NULL UNIQUE,
+    division TEXT NOT NULL,
+    conference TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS coaches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    last_name TEXT NOT NULL,
+    first_name TEXT,
+    hired_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+  );
+
   CREATE TABLE IF NOT EXISTS games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    home_team TEXT NOT NULL,
-    away_team TEXT NOT NULL,
+    home_team_id INTEGER NOT NULL,
+    away_team_id INTEGER NOT NULL,
     home_score INTEGER NOT NULL,
     away_score INTEGER NOT NULL,
     total_plays INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (home_team_id) REFERENCES teams(id),
+    FOREIGN KEY (away_team_id) REFERENCES teams(id)
   );
 
   CREATE TABLE IF NOT EXISTS game_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id INTEGER NOT NULL,
-    team TEXT NOT NULL,
+    team_id INTEGER NOT NULL,
     rushing_yards INTEGER,
     passing_yards INTEGER,
     total_yards INTEGER,
     turnovers INTEGER,
-    FOREIGN KEY (game_id) REFERENCES games(id)
+    FOREIGN KEY (game_id) REFERENCES games(id),
+    FOREIGN KEY (team_id) REFERENCES teams(id)
   );
 `)
+
+// Utility functions
+function getRandomSurname() {
+  return surnames[Math.floor(Math.random() * surnames.length)]
+}
+
+function getRandomFirstName() {
+  return firstNames[Math.floor(Math.random() * firstNames.length)]
+}
+
+function createCoachForTeam(teamId) {
+  const firstName = getRandomFirstName()
+  const lastName = getRandomSurname()
+  const insertCoach = db.prepare(`
+    INSERT INTO coaches (team_id, first_name, last_name)
+    VALUES (?, ?, ?)
+  `)
+  const result = insertCoach.run(teamId, firstName, lastName)
+  return { id: result.lastInsertRowid, firstName, lastName, teamId }
+}
 
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'TI Football API is running' })
+})
+
+// Teams routes
+app.get('/api/teams', (req, res) => {
+  const teams = db.prepare(`
+    SELECT t.*, c.first_name as coach_first_name, c.last_name as coach_last_name
+    FROM teams t
+    LEFT JOIN coaches c ON t.id = c.team_id
+    ORDER BY t.conference, t.division, t.name
+  `).all()
+  res.json(teams)
+})
+
+app.get('/api/teams/:id', (req, res) => {
+  const team = db.prepare(`
+    SELECT t.*, c.first_name as coach_first_name, c.last_name as coach_last_name, c.id as coach_id
+    FROM teams t
+    LEFT JOIN coaches c ON t.id = c.team_id
+    WHERE t.id = ?
+  `).get(req.params.id)
+
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' })
+  }
+
+  res.json(team)
+})
+
+// Coaches routes
+app.post('/api/coaches', (req, res) => {
+  const { team_id } = req.body
+
+  if (!team_id) {
+    return res.status(400).json({ error: 'team_id is required' })
+  }
+
+  const coach = createCoachForTeam(team_id)
+  res.json(coach)
+})
+
+app.get('/api/surnames/random', (req, res) => {
+  res.json({ surname: getRandomSurname() })
 })
 
 app.get('/api/games', (req, res) => {
