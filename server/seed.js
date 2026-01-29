@@ -1,7 +1,7 @@
-import Database from 'better-sqlite3'
+import initSqlJs from 'sql.js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -17,8 +17,14 @@ const firstNames = JSON.parse(
   readFileSync(join(__dirname, 'data', 'firstnames.json'), 'utf-8')
 )
 
-// Initialize database
-const db = new Database(join(__dirname, 'db', 'tifootball.db'))
+// Database path
+const dbDir = join(__dirname, 'db')
+const dbPath = join(dbDir, 'tifootball.db')
+
+// Ensure db directory exists
+if (!existsSync(dbDir)) {
+  mkdirSync(dbDir, { recursive: true })
+}
 
 // Helper functions
 function getRandomSurname() {
@@ -29,92 +35,105 @@ function getRandomFirstName() {
   return firstNames[Math.floor(Math.random() * firstNames.length)]
 }
 
-console.log('🏈 Seeding TI Football database...\n')
+async function seed() {
+  console.log('Seeding TI Football database...\n')
 
-// Create tables if they don't exist
-console.log('Creating database tables...')
-db.exec(`
-  CREATE TABLE IF NOT EXISTS teams (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    city TEXT NOT NULL,
-    abbreviation TEXT NOT NULL UNIQUE,
-    division TEXT NOT NULL,
-    conference TEXT NOT NULL
-  );
+  const SQL = await initSqlJs()
 
-  CREATE TABLE IF NOT EXISTS coaches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    team_id INTEGER NOT NULL,
-    last_name TEXT NOT NULL,
-    first_name TEXT,
-    hired_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (team_id) REFERENCES teams(id)
-  );
+  // Always create a fresh database for seeding
+  const db = new SQL.Database()
 
-  CREATE TABLE IF NOT EXISTS games (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    home_team_id INTEGER NOT NULL,
-    away_team_id INTEGER NOT NULL,
-    home_score INTEGER NOT NULL,
-    away_score INTEGER NOT NULL,
-    total_plays INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (home_team_id) REFERENCES teams(id),
-    FOREIGN KEY (away_team_id) REFERENCES teams(id)
-  );
+  // Create tables
+  console.log('Creating database tables...')
+  db.run(`
+    CREATE TABLE IF NOT EXISTS teams (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      city TEXT NOT NULL,
+      abbreviation TEXT NOT NULL UNIQUE,
+      division TEXT NOT NULL,
+      conference TEXT NOT NULL
+    )
+  `)
 
-  CREATE TABLE IF NOT EXISTS game_stats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER NOT NULL,
-    team_id INTEGER NOT NULL,
-    rushing_yards INTEGER,
-    passing_yards INTEGER,
-    total_yards INTEGER,
-    turnovers INTEGER,
-    FOREIGN KEY (game_id) REFERENCES games(id),
-    FOREIGN KEY (team_id) REFERENCES teams(id)
-  );
-`)
-console.log('✓ Tables created\n')
+  db.run(`
+    CREATE TABLE IF NOT EXISTS coaches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id INTEGER NOT NULL,
+      last_name TEXT NOT NULL,
+      first_name TEXT,
+      hired_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )
+  `)
 
-// Insert teams
-console.log('Inserting NFL teams...')
-const insertTeam = db.prepare(`
-  INSERT OR REPLACE INTO teams (id, name, city, abbreviation, division, conference)
-  VALUES (?, ?, ?, ?, ?, ?)
-`)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS games (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      home_team_id INTEGER NOT NULL,
+      away_team_id INTEGER NOT NULL,
+      home_score INTEGER NOT NULL,
+      away_score INTEGER NOT NULL,
+      total_plays INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (home_team_id) REFERENCES teams(id),
+      FOREIGN KEY (away_team_id) REFERENCES teams(id)
+    )
+  `)
 
-const insertCoach = db.prepare(`
-  INSERT INTO coaches (team_id, first_name, last_name)
-  VALUES (?, ?, ?)
-`)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS game_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id INTEGER NOT NULL,
+      team_id INTEGER NOT NULL,
+      rushing_yards INTEGER,
+      passing_yards INTEGER,
+      total_yards INTEGER,
+      turnovers INTEGER,
+      FOREIGN KEY (game_id) REFERENCES games(id),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )
+  `)
+  console.log('Tables created\n')
 
-let teamCount = 0
-let coachCount = 0
+  // Insert teams
+  console.log('Inserting NFL teams...')
 
-teams.forEach(team => {
-  insertTeam.run(
-    team.id,
-    team.name,
-    team.city,
-    team.abbreviation,
-    team.division,
-    team.conference
-  )
-  teamCount++
+  let teamCount = 0
+  let coachCount = 0
 
-  // Assign a random coach to each team
-  const coachFirstName = getRandomFirstName()
-  const coachLastName = getRandomSurname()
-  insertCoach.run(team.id, coachFirstName, coachLastName)
-  coachCount++
+  teams.forEach(team => {
+    db.run(
+      'INSERT OR REPLACE INTO teams (id, name, city, abbreviation, division, conference) VALUES (?, ?, ?, ?, ?, ?)',
+      [team.id, team.name, team.city, team.abbreviation, team.division, team.conference]
+    )
+    teamCount++
 
-  console.log(`  ✓ ${team.city} ${team.name} - Coach ${coachFirstName} ${coachLastName}`)
+    // Assign a random coach to each team
+    const coachFirstName = getRandomFirstName()
+    const coachLastName = getRandomSurname()
+    db.run(
+      'INSERT INTO coaches (team_id, first_name, last_name) VALUES (?, ?, ?)',
+      [team.id, coachFirstName, coachLastName]
+    )
+    coachCount++
+
+    console.log(`  ${team.city} ${team.name} - Coach ${coachFirstName} ${coachLastName}`)
+  })
+
+  // Save database to file
+  const data = db.export()
+  const buffer = Buffer.from(data)
+  writeFileSync(dbPath, buffer)
+
+  console.log(`\nSeeding complete!`)
+  console.log(`   ${teamCount} teams inserted`)
+  console.log(`   ${coachCount} coaches assigned\n`)
+
+  db.close()
+}
+
+seed().catch(err => {
+  console.error('Seeding failed:', err)
+  process.exit(1)
 })
-
-console.log(`\n✅ Seeding complete!`)
-console.log(`   ${teamCount} teams inserted`)
-console.log(`   ${coachCount} coaches assigned\n`)
-
-db.close()

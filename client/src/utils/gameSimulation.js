@@ -41,12 +41,20 @@ export function generatePlayTime() {
  * @returns {number} Yards gained (can be negative on immediate tackle)
  */
 export function runningPlay() {
+  // DEBUG: Short circuit for testing touchdowns
+  // return { yards: 15, steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }
+
   let yards = 0
   let tackled = false
+  const steps = []  // Track each yard advanced
 
   while (!tackled) {
     const playerChoice = Math.floor(Math.random() * 4) + 1  // 1-4
-    const computerChoice = Math.floor(Math.random() * 5) + 1  // 1-5
+
+    // After gaining 6 yards, defense range expands to 1-7 (harder to tackle)
+    // This nudges average from 3.7 to ~4.4 yards per carry (closer to NFL's 4.4)
+    const defenseRange = yards >= 6 ? 7 : 5
+    const computerChoice = Math.floor(Math.random() * defenseRange) + 1
 
     if (playerChoice === computerChoice) {
       // Tackled!
@@ -60,10 +68,11 @@ export function runningPlay() {
     } else {
       // Successful advance
       yards++
+      steps.push(yards)
     }
   }
 
-  return yards
+  return { yards, steps }
 }
 
 /**
@@ -77,6 +86,7 @@ export function runAfterCatch() {
   // so no negative yards on first attempt
   let yards = 0
   let tackled = false
+  const steps = []
 
   while (!tackled) {
     const playerChoice = Math.floor(Math.random() * 4) + 1  // 1-4
@@ -88,10 +98,11 @@ export function runAfterCatch() {
     } else {
       // Successful advance
       yards++
+      steps.push(yards)
     }
   }
 
-  return yards
+  return { yards, steps }
 }
 
 /**

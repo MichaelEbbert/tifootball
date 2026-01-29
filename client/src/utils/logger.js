@@ -28,12 +28,14 @@ const LOG_LEVELS = {
 
 class Logger {
   constructor() {
-    // Get log level from localStorage, default to INFO
-    const savedLevel = localStorage.getItem('LOG_LEVEL')
+    // Get log level from localStorage (browser) or environment (Node.js), default to INFO
+    // In Node.js, default to OFF for silent operation
+    const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+    const savedLevel = isBrowser ? localStorage.getItem('LOG_LEVEL') : (process.env.LOG_LEVEL || 'OFF')
     this.level = LOG_LEVELS[savedLevel] !== undefined ? LOG_LEVELS[savedLevel] : LOG_LEVELS.INFO
 
-    // Show current log level on startup (only in dev mode)
-    if (import.meta.env.DEV && this.level !== LOG_LEVELS.OFF) {
+    // Show current log level on startup (only in browser dev mode)
+    if (isBrowser && typeof import.meta.env !== 'undefined' && import.meta.env.DEV && this.level !== LOG_LEVELS.OFF) {
       console.log(`[Logger] Log level: ${this.getLevelName()} (change with localStorage.setItem('LOG_LEVEL', 'DEBUG|INFO|WARN|ERROR|OFF'))`)
     }
   }
@@ -70,7 +72,10 @@ class Logger {
     const upperLevel = level.toUpperCase()
     if (LOG_LEVELS[upperLevel] !== undefined) {
       this.level = LOG_LEVELS[upperLevel]
-      localStorage.setItem('LOG_LEVEL', upperLevel)
+      const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+      if (isBrowser) {
+        localStorage.setItem('LOG_LEVEL', upperLevel)
+      }
       console.log(`[Logger] Log level changed to: ${upperLevel}`)
     } else {
       console.error(`[Logger] Invalid log level: ${level}. Use DEBUG, INFO, WARN, ERROR, or OFF`)

@@ -1,0 +1,190 @@
+/**
+ * Silent Simulator - Headless game simulation for statistics research
+ *
+ * Runs games using the same logic as the UI but without delays or rendering.
+ * Useful for testing game balance and gathering statistics.
+ *
+ * Usage:
+ *   node silent-simulator.js [--games N]
+ *
+ * Examples:
+ *   node silent-simulator.js              # Run 100 games (default)
+ *   node silent-simulator.js --games 1000 # Run 1000 games
+ */
+
+import { fileURLToPath, pathToFileURL } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+// Import game logic from client (convert to file:// URL for Windows compatibility)
+const gameEnginePath = pathToFileURL(join(__dirname, '..', 'client', 'src', 'utils', 'gameEngine.js')).href
+const gameSimPath = pathToFileURL(join(__dirname, '..', 'client', 'src', 'utils', 'gameSimulation.js')).href
+
+const { initializeGame, executePlay, isGameOver } = await import(gameEnginePath)
+const { runningPlay } = await import(gameSimPath)
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+let numGames = 100
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--games' && args[i + 1]) {
+    numGames = parseInt(args[i + 1], 10)
+  }
+}
+
+// Mock team data
+const homeTeam = {
+  id: 1,
+  city: 'Home',
+  name: 'Team',
+  abbreviation: 'HME'
+}
+
+const awayTeam = {
+  id: 2,
+  city: 'Away',
+  name: 'Team',
+  abbreviation: 'AWY'
+}
+
+// Statistics collectors
+const stats = {
+  totalGames: 0,
+  totalPoints: 0,
+  totalPlays: 0,
+  totalRushingYards: 0,
+  totalRushingPlays: 0,
+  totalFirstDowns: 0,
+  totalTouchdowns: 0,
+  totalFumbles: 0,
+  homeWins: 0,
+  awayWins: 0,
+  ties: 0,
+  highScore: 0,
+  lowScore: Infinity,
+  shutouts: 0,
+  pointsDistribution: {}
+}
+
+console.log(`\n🏈 Silent Simulator`)
+console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+console.log(`Running ${numGames} games...\n`)
+
+const startTime = Date.now()
+
+// Run simulations
+for (let game = 0; game < numGames; game++) {
+  const gameState = initializeGame(homeTeam, awayTeam, true) // simplified mode
+
+  // Run until game is over
+  while (!isGameOver(gameState)) {
+    executePlay(gameState)
+  }
+
+  // Collect game stats
+  stats.totalGames++
+
+  const totalGamePoints = gameState.score.home + gameState.score.away
+  stats.totalPoints += totalGamePoints
+  stats.totalPlays += gameState.playNumber
+
+  stats.totalRushingYards += gameState.homeStats.runningYards + gameState.awayStats.runningYards
+  stats.totalRushingPlays += gameState.homeStats.runningPlays + gameState.awayStats.runningPlays
+  stats.totalFirstDowns += gameState.homeStats.firstDowns + gameState.awayStats.firstDowns
+  stats.totalFumbles += gameState.homeStats.fumblesLost + gameState.awayStats.fumblesLost
+
+  // Count touchdowns (score / 6, since simplified mode has no XP)
+  const homeTDs = Math.floor(gameState.score.home / 6)
+  const awayTDs = Math.floor(gameState.score.away / 6)
+  stats.totalTouchdowns += homeTDs + awayTDs
+
+  // Win/loss tracking
+  if (gameState.score.home > gameState.score.away) {
+    stats.homeWins++
+  } else if (gameState.score.away > gameState.score.home) {
+    stats.awayWins++
+  } else {
+    stats.ties++
+  }
+
+  // High/low scores
+  stats.highScore = Math.max(stats.highScore, gameState.score.home, gameState.score.away)
+  stats.lowScore = Math.min(stats.lowScore, gameState.score.home, gameState.score.away)
+
+  // Shutouts
+  if (gameState.score.home === 0 || gameState.score.away === 0) {
+    stats.shutouts++
+  }
+
+  // Points distribution
+  const homePoints = gameState.score.home
+  const awayPoints = gameState.score.away
+  stats.pointsDistribution[homePoints] = (stats.pointsDistribution[homePoints] || 0) + 1
+  stats.pointsDistribution[awayPoints] = (stats.pointsDistribution[awayPoints] || 0) + 1
+
+  // Progress indicator
+  if ((game + 1) % 100 === 0 || game === numGames - 1) {
+    process.stdout.write(`\r  Simulated ${game + 1} / ${numGames} games`)
+  }
+}
+
+const endTime = Date.now()
+const duration = (endTime - startTime) / 1000
+
+// Calculate averages
+const avgPointsPerGame = stats.totalPoints / stats.totalGames
+const avgPointsPerTeam = avgPointsPerGame / 2
+const avgPlaysPerGame = stats.totalPlays / stats.totalGames
+const avgYardsPerCarry = stats.totalRushingYards / stats.totalRushingPlays
+const avgRushingYardsPerGame = stats.totalRushingYards / stats.totalGames
+const avgFirstDownsPerGame = stats.totalFirstDowns / stats.totalGames
+const avgTDsPerGame = stats.totalTouchdowns / stats.totalGames
+const avgFumblesPerGame = stats.totalFumbles / stats.totalGames
+
+// Output results
+console.log(`\n\n📊 Results (${numGames} games)`)
+console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+
+console.log(`\n🏆 Scoring:`)
+console.log(`  Avg points/game (total):    ${avgPointsPerGame.toFixed(1)}`)
+console.log(`  Avg points/team/game:       ${avgPointsPerTeam.toFixed(1)}`)
+console.log(`  Avg touchdowns/game:        ${avgTDsPerGame.toFixed(2)}`)
+console.log(`  High score (single team):   ${stats.highScore}`)
+console.log(`  Low score (single team):    ${stats.lowScore}`)
+console.log(`  Shutouts:                   ${stats.shutouts} (${(stats.shutouts / stats.totalGames / 2 * 100).toFixed(1)}% of teams)`)
+
+console.log(`\n🏃 Rushing:`)
+console.log(`  Avg yards/carry:            ${avgYardsPerCarry.toFixed(2)}`)
+console.log(`  Avg rushing yards/game:     ${avgRushingYardsPerGame.toFixed(1)}`)
+console.log(`  Avg rushing plays/game:     ${(stats.totalRushingPlays / stats.totalGames).toFixed(1)}`)
+
+console.log(`\n📈 Game Flow:`)
+console.log(`  Avg plays/game:             ${avgPlaysPerGame.toFixed(1)}`)
+console.log(`  Avg first downs/game:       ${avgFirstDownsPerGame.toFixed(1)}`)
+console.log(`  Avg turnovers/game:         ${avgFumblesPerGame.toFixed(2)}`)
+
+console.log(`\n⚖️  Balance:`)
+console.log(`  Home wins:                  ${stats.homeWins} (${(stats.homeWins / stats.totalGames * 100).toFixed(1)}%)`)
+console.log(`  Away wins:                  ${stats.awayWins} (${(stats.awayWins / stats.totalGames * 100).toFixed(1)}%)`)
+console.log(`  Ties:                       ${stats.ties} (${(stats.ties / stats.totalGames * 100).toFixed(1)}%)`)
+
+console.log(`\n⏱️  Performance:`)
+console.log(`  Total time:                 ${duration.toFixed(2)} seconds`)
+console.log(`  Games/second:               ${(numGames / duration).toFixed(1)}`)
+
+// Points distribution histogram (top 10)
+console.log(`\n📊 Points Distribution (top 10):`)
+const sortedPoints = Object.entries(stats.pointsDistribution)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 10)
+
+for (const [points, count] of sortedPoints) {
+  const pct = (count / (stats.totalGames * 2) * 100).toFixed(1)
+  const bar = '█'.repeat(Math.round(pct))
+  console.log(`  ${points.toString().padStart(3)} pts: ${bar} ${pct}%`)
+}
+
+console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)

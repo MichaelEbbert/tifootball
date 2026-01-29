@@ -247,7 +247,9 @@ function executeRun(gameState) {
   const stats = getStats(gameState, gameState.possession)
   stats.runningPlays++
 
-  const yards = runningPlay()
+  const runResult = runningPlay()
+  const yards = runResult.yards
+  const steps = runResult.steps
   stats.runningYards += Math.max(0, yards)
 
   // Check for fumble
@@ -258,6 +260,7 @@ function executeRun(gameState) {
       return {
         type: 'run',
         yards: yards,
+        steps: steps,
         fumble: true,
         turnover: true,
         description: `Run for ${yards} yards, FUMBLE, recovered by defense`
@@ -265,12 +268,17 @@ function executeRun(gameState) {
     }
   }
 
+  // Check if this will be a touchdown before updating
+  const isTouchdown = gameState.yardline + yards >= 100
+
   updateDownAndDistance(gameState, yards)
 
   return {
     type: 'run',
     yards: yards,
-    description: `Run for ${yards} yards`
+    steps: steps,
+    touchdown: isTouchdown,
+    description: yards >= 0 ? `Tackled for a gain of ${yards} yards` : `Tackled for a loss of ${Math.abs(yards)} yards`
   }
 }
 
@@ -290,7 +298,8 @@ function executePass(gameState) {
   // Check for interception
   if (Math.random() < GAME_CONSTANTS.PASS_INTERCEPTION[passType]) {
     stats.interceptionsLost++
-    const returnYards = runAfterCatch()
+    const racResult = runAfterCatch()
+    const returnYards = racResult.yards
     // Defense gets the return yards
     const defenseStats = getStats(gameState, gameState.possession === 'home' ? 'away' : 'home')
     defenseStats.interceptionReturnYards += returnYards
@@ -311,7 +320,8 @@ function executePass(gameState) {
     // Completed pass
     const [minAir, maxAir] = GAME_CONSTANTS.AIR_YARDS[passType]
     const airYards = Math.floor(Math.random() * (maxAir - minAir + 1)) + minAir
-    const racYards = runAfterCatch()
+    const racResult = runAfterCatch()
+    const racYards = racResult.yards
     const totalYards = airYards + racYards
 
     stats.passYards += totalYards
@@ -370,7 +380,8 @@ function executePunt(gameState) {
   }
 
   // Return
-  const returnYards = runAfterCatch()
+  const racResult = runAfterCatch()
+  const returnYards = racResult.yards
   const defenseStats = getStats(gameState, gameState.possession === 'home' ? 'away' : 'home')
   defenseStats.puntReturnYards += returnYards
 
@@ -505,7 +516,8 @@ function kickoff(gameState) {
     gameState.down = 1
     gameState.distance = 10
   } else {
-    const returnYards = runAfterCatch()
+    const racResult = runAfterCatch()
+    const returnYards = racResult.yards
     const receiverStats = getStats(gameState, receiver)
     receiverStats.kickReturnYards += returnYards
 

@@ -7,11 +7,13 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "seed": "node seed.js",
-    "populate-schedule": "node populate-random-schedule.js"
+    "populate-schedule": "node populate-random-schedule.js",
+    "simulate": "node silent-simulator.js",
+    "simulate:1000": "node silent-simulator.js --games 1000"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "better-sqlite3": "^11.7.0",
+    "sql.js": "^1.11.0",
     "cors": "^2.8.5"
   }
 }

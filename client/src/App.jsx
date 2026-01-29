@@ -3,6 +3,8 @@ import './App.css'
 import logger from './utils/logger'
 import GameDisplay from './components/GameDisplay'
 
+const SAVED_GAME_KEY = 'tifootball_saved_game'
+
 function App() {
   const [nextGame, setNextGame] = useState(null)
   const [standings, setStandings] = useState([])
@@ -10,8 +12,21 @@ function App() {
   const [pauseDuration, setPauseDuration] = useState(3) // Default 3 seconds
   const [gameInProgress, setGameInProgress] = useState(false)
   const [currentGame, setCurrentGame] = useState(null)
+  const [savedGameState, setSavedGameState] = useState(null)
 
   useEffect(() => {
+    // Check for saved game on load
+    const saved = localStorage.getItem(SAVED_GAME_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setSavedGameState(parsed)
+        logger.info('Found saved game in progress')
+      } catch (e) {
+        logger.error('Failed to parse saved game:', e)
+        localStorage.removeItem(SAVED_GAME_KEY)
+      }
+    }
     fetchData()
   }, [])
 
@@ -60,9 +75,25 @@ function App() {
 
   function handleGameComplete(finalGameState) {
     logger.info('Game completed, returning to home screen')
+    localStorage.removeItem(SAVED_GAME_KEY)
+    setSavedGameState(null)
     setGameInProgress(false)
     setCurrentGame(null)
     // TODO: Save game results to database
+  }
+
+  function handleResumeGame() {
+    if (savedGameState) {
+      logger.info('Resuming saved game')
+      setCurrentGame(savedGameState.game)
+      setGameInProgress(true)
+    }
+  }
+
+  function handleAbandonGame() {
+    logger.info('Abandoning saved game')
+    localStorage.removeItem(SAVED_GAME_KEY)
+    setSavedGameState(null)
   }
 
   if (loading) {
@@ -76,7 +107,10 @@ function App() {
         <GameDisplay
           game={currentGame}
           pauseDuration={pauseDuration}
+          onPauseDurationChange={setPauseDuration}
           onGameComplete={handleGameComplete}
+          savedGameState={savedGameState?.gameState}
+          saveKey={SAVED_GAME_KEY}
         />
       </div>
     )
@@ -85,27 +119,56 @@ function App() {
   // Show home screen
   return (
     <div className="app">
-      <div className="pause-control">
-        <label>Pause (seconds):</label>
-        {[1, 2, 3, 4, 5].map(seconds => (
-          <label key={seconds} className="radio-option">
-            <input
-              type="radio"
-              name="pause"
-              value={seconds}
-              checked={pauseDuration === seconds}
-              onChange={(e) => setPauseDuration(Number(e.target.value))}
-            />
-            {seconds}
-          </label>
-        ))}
-      </div>
-
       <h1>TI Football - 1979 Game Simulator</h1>
 
-      {nextGame && (
+      {savedGameState && (
+        <div className="saved-game">
+          <h2>Game In Progress</h2>
+          <p className="saved-game-info">
+            {savedGameState.gameState.awayTeam.name} {savedGameState.gameState.score.away} @ {savedGameState.gameState.homeTeam.name} {savedGameState.gameState.score.home}
+            <br />
+            Q{savedGameState.gameState.quarter} - {Math.floor(savedGameState.gameState.clock / 60)}:{(savedGameState.gameState.clock % 60).toString().padStart(2, '0')}
+          </p>
+          <div className="saved-game-buttons">
+            <button className="resume-game-btn" onClick={handleResumeGame}>
+              Resume Game
+            </button>
+            <button className="abandon-game-btn" onClick={handleAbandonGame}>
+              Abandon Game
+            </button>
+          </div>
+        </div>
+      )}
+
+      {nextGame && !savedGameState && (
         <div className="next-game">
           <h2>Next Game</h2>
+          <div className="pause-control">
+            <label>Speed:</label>
+            {[1, 2, 3, 4, 5].map(seconds => (
+              <label key={seconds} className="radio-option">
+                <input
+                  type="radio"
+                  name="pause"
+                  value={seconds}
+                  checked={pauseDuration === seconds}
+                  onChange={(e) => setPauseDuration(Number(e.target.value))}
+                />
+                {seconds}s
+              </label>
+            ))}
+            <label className="radio-option fast-option">
+              <input
+                type="radio"
+                name="pause"
+                value={0.1}
+                checked={pauseDuration === 0.1}
+                onChange={(e) => setPauseDuration(Number(e.target.value))}
+              />
+              I'm going fast again!
+            </label>
+          </div>
+          <br />
           <button className="begin-game-btn" onClick={handleBeginGame}>
             Begin Game {nextGame.game_number}: {nextGame.away_abbr} @ {nextGame.home_abbr}
           </button>

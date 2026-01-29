@@ -30,7 +30,7 @@ tifootball/
 
 - **Frontend:** React + Vite
 - **Backend:** Node.js + Express
-- **Database:** SQLite (better-sqlite3)
+- **Database:** SQLite (sql.js - pure JavaScript, no native build required)
 
 ## Setup Instructions
 

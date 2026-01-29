@@ -97,7 +97,8 @@ The running algorithm is a number-matching game:
 
 **Database:**
 - **SQLite** - File-based database (no DBA needed)
-- **better-sqlite3** - Synchronous Node.js library for SQLite
+- **sql.js** - Pure JavaScript SQLite implementation (no native compilation required)
+- Works on any machine with Node.js - no C++ build tools needed
 - Stores team statistics after each game
 
 **Architecture:**
@@ -345,7 +346,75 @@ Then refresh the page.
 5. ✅ Build running algorithm (1-4 vs 1-5 matching game)
 6. ✅ Create logging system with configurable levels
 7. ✅ Add pause control (1-5 seconds between plays)
-8. Wire up game simulation to UI
-9. Implement pass/kick probability tables
-10. Add automated play sequencing with configurable delays
-11. Create React components for play-by-play display
+8. ✅ Wire up game simulation to UI
+9. ✅ Add animated running plays ("Running ...1 ...2 ...3")
+10. ✅ Add TOUCHDOWN! display with extended pause
+11. ✅ Add localStorage auto-save for game persistence
+12. ✅ Create Silent Simulator for statistics research
+13. Implement pass/kick probability tables
+14. Add extra points after touchdowns
+
+## Silent Simulator
+
+A headless game simulation tool for statistics research and game balance testing. Runs games using the exact same logic as the UI but without delays or rendering.
+
+### Purpose
+
+- Test game balance and mechanics without watching full games
+- Gather statistics (yards per carry, points per game, etc.)
+- Validate changes to game algorithms
+- Research questions like "What's our average yards per carry?"
+
+### How to Run
+
+```bash
+cd server
+
+# Run 100 games (default)
+npm run simulate
+
+# Run 1000 games
+npm run simulate:1000
+
+# Run any number of games
+node silent-simulator.js --games 5000
+```
+
+### Performance
+
+- Runs ~14,000 games per second
+- 10,000 games completes in under 1 second
+
+### Sample Output
+
+```
+📊 Results (10000 games)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏆 Scoring:
+  Avg points/game (total):    20.4
+  Avg points/team/game:       10.2
+  Avg touchdowns/game:        3.39
+
+🏃 Rushing:
+  Avg yards/carry:            4.52
+  Avg rushing yards/game:     579.6
+```
+
+### Important Notes
+
+- Uses the SAME code as the UI (`client/src/utils/gameEngine.js` and `gameSimulation.js`)
+- Any changes to game logic automatically apply to both UI and Silent Simulator
+- No need to update Silent Simulator separately when adding features
+
+## Running Algorithm Tuning
+
+The original 1979 algorithm (1-4 vs 1-5) produced 3.7 yards per carry. To match NFL's 4.4 average, we added a "breakaway" mechanic:
+
+**Current Algorithm:**
+- First 6 yards: Player picks 1-4, Defense picks 1-5 (20% tackle chance)
+- After 6 yards: Player picks 1-4, Defense picks 1-7 (14.3% tackle chance)
+
+**Result:** 4.52 yards per carry (verified via Silent Simulator with 10,000+ games)
+
+This gives slightly above-NFL average, making for exciting games while staying realistic.

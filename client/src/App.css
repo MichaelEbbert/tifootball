@@ -6,15 +6,13 @@
 
 /* Pause Control */
 .pause-control {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background-color: #f0f0f0;
+  background-color: #2a2a2a;
   padding: 10px 15px;
   border-radius: 5px;
-  border: 2px solid #333;
   font-family: 'Courier New', monospace;
   font-size: 0.9em;
+  margin-bottom: 15px;
+  display: inline-block;
 }
 
 .pause-control label:first-child {
@@ -37,9 +35,87 @@
   color: #0066cc;
 }
 
+.fast-option {
+  background-color: #ff6600;
+  color: #fff;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 3px;
+  margin-left: 15px;
+}
+
+.fast-option:hover {
+  color: #fff;
+  background-color: #ff8800;
+}
+
 h1 {
   color: #1a1a1a;
   margin-bottom: 30px;
+}
+
+/* Saved Game Section */
+.saved-game {
+  background-color: #2a4a2a;
+  color: #00ff00;
+  padding: 30px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-family: 'Courier New', monospace;
+  border: 3px solid #00ff00;
+}
+
+.saved-game h2 {
+  margin-top: 0;
+  color: #ffcc00;
+}
+
+.saved-game-info {
+  font-size: 1.3em;
+  margin: 15px 0;
+}
+
+.saved-game-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.resume-game-btn {
+  background-color: #00ff00;
+  color: #1a1a1a;
+  border: none;
+  padding: 15px 30px;
+  font-size: 1.3em;
+  font-weight: bold;
+  font-family: 'Courier New', monospace;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.resume-game-btn:hover {
+  background-color: #00cc00;
+  transform: scale(1.05);
+}
+
+.abandon-game-btn {
+  background-color: #cc0000;
+  color: #fff;
+  border: none;
+  padding: 15px 30px;
+  font-size: 1.3em;
+  font-weight: bold;
+  font-family: 'Courier New', monospace;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.abandon-game-btn:hover {
+  background-color: #990000;
+  transform: scale(1.05);
 }
 
 /* Next Game Section */

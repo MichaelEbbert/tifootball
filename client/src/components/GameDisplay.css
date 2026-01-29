@@ -3,6 +3,84 @@
   margin: 0 auto;
 }
 
+/* Game Controls */
+.game-controls {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 15px 20px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.pause-btn {
+  padding: 10px 25px;
+  font-size: 1.1em;
+  font-weight: bold;
+  cursor: pointer;
+  border: 2px solid #00ff00;
+  border-radius: 5px;
+  background-color: #1a1a1a;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  transition: all 0.2s ease;
+}
+
+.pause-btn:hover {
+  background-color: #00ff00;
+  color: #1a1a1a;
+}
+
+.pause-btn.paused {
+  background-color: #ff6600;
+  border-color: #ff6600;
+  color: #1a1a1a;
+  animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+}
+
+.speed-control label {
+  cursor: pointer;
+}
+
+.speed-control .radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  background-color: #333;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.speed-control .radio-option:hover {
+  background-color: #444;
+}
+
+.speed-control input[type="radio"] {
+  cursor: pointer;
+}
+
+.speed-control .fast-option {
+  background-color: #ff6600;
+  color: #fff;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
 /* Scoreboard */
 .scoreboard {
   background-color: #1a1a1a;
@@ -99,6 +177,37 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* Running animation */
+.running-animation {
+  color: #0066cc;
+}
+
+/* Touchdown display */
+.touchdown-display {
+  background-color: #ffcc00;
+  border-color: #ff9900;
+}
+
+.touchdown-text {
+  font-size: 2.5em;
+  font-weight: bold;
+  color: #cc0000;
+  text-shadow: 2px 2px 0 #000;
+  animation: touchdown-flash 0.5s ease-in-out infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes touchdown-flash {
+  0%, 100% {
+    color: #cc0000;
+    transform: scale(1);
+  }
+  50% {
+    color: #ff0000;
+    transform: scale(1.05);
+  }
 }
 
 /* Game Over */
