@@ -1,0 +1,166 @@
+.game-display {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Scoreboard */
+.scoreboard {
+  background-color: #1a1a1a;
+  color: #00ff00;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-family: 'Courier New', monospace;
+}
+
+.score {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 15px;
+}
+
+.team-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-name {
+  font-size: 1.2em;
+}
+
+.points {
+  font-size: 3em;
+  font-weight: bold;
+}
+
+.game-info {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  font-size: 1.2em;
+  border-top: 2px solid #00ff00;
+  padding-top: 15px;
+}
+
+/* Field Position */
+.field-position {
+  background-color: #f0f0f0;
+  padding: 15px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.possession-indicator {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #0066cc;
+  margin-bottom: 8px;
+}
+
+.down-distance {
+  font-size: 1.1em;
+  font-family: 'Courier New', monospace;
+}
+
+/* Play Result */
+.play-result {
+  background-color: #fff;
+  border: 2px solid #333;
+  padding: 20px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  min-height: 100px;
+}
+
+.play-number {
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.play-description {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #1a1a1a;
+  font-family: 'Courier New', monospace;
+}
+
+.turnover {
+  font-size: 1.5em;
+  color: #cc0000;
+  font-weight: bold;
+  margin-top: 10px;
+  animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Game Over */
+.game-over {
+  background-color: #1a1a1a;
+  color: #00ff00;
+  padding: 40px;
+  border-radius: 8px;
+  margin: 30px 0;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+}
+
+.game-over h2 {
+  margin: 0 0 20px 0;
+  font-size: 2.5em;
+}
+
+.final-score {
+  font-size: 1.8em;
+  font-weight: bold;
+}
+
+/* Stats */
+.stats-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 30px;
+}
+
+.team-stats {
+  background-color: #fff;
+  border: 2px solid #333;
+  border-radius: 5px;
+  padding: 20px;
+}
+
+.team-stats h3 {
+  margin-top: 0;
+  color: #1a1a1a;
+  border-bottom: 2px solid #333;
+  padding-bottom: 10px;
+}
+
+.stat-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e0e0e0;
+  font-family: 'Courier New', monospace;
+}
+
+.stat-line:last-child {
+  border-bottom: none;
+}
+
+.stat-line span:first-child {
+  font-weight: bold;
+  color: #666;
+}
+
+.stat-line span:last-child {
+  color: #1a1a1a;
+}

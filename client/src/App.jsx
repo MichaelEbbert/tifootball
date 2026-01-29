@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import logger from './utils/logger'
+import GameDisplay from './components/GameDisplay'
 
 function App() {
   const [nextGame, setNextGame] = useState(null)
   const [standings, setStandings] = useState([])
   const [loading, setLoading] = useState(true)
   const [pauseDuration, setPauseDuration] = useState(3) // Default 3 seconds
+  const [gameInProgress, setGameInProgress] = useState(false)
+  const [currentGame, setCurrentGame] = useState(null)
 
   useEffect(() => {
     fetchData()
@@ -33,15 +36,53 @@ function App() {
   }
 
   function handleBeginGame() {
-    alert(`Starting Game ${nextGame.game_number}!\nPause duration: ${pauseDuration} seconds`)
-    // Game simulation will happen here later
-    // Will use pauseDuration for pauses between plays
+    logger.info(`Starting Game ${nextGame.game_number}`)
+
+    // Set up game with team info
+    setCurrentGame({
+      gameNumber: nextGame.game_number,
+      homeTeam: {
+        id: nextGame.home_team_id,
+        city: nextGame.home_city,
+        name: nextGame.home_name,
+        abbreviation: nextGame.home_abbr
+      },
+      awayTeam: {
+        id: nextGame.away_team_id,
+        city: nextGame.away_city,
+        name: nextGame.away_name,
+        abbreviation: nextGame.away_abbr
+      }
+    })
+
+    setGameInProgress(true)
+  }
+
+  function handleGameComplete(finalGameState) {
+    logger.info('Game completed, returning to home screen')
+    setGameInProgress(false)
+    setCurrentGame(null)
+    // TODO: Save game results to database
   }
 
   if (loading) {
     return <div className="app"><h1>Loading...</h1></div>
   }
 
+  // Show game display if game is in progress
+  if (gameInProgress && currentGame) {
+    return (
+      <div className="app">
+        <GameDisplay
+          game={currentGame}
+          pauseDuration={pauseDuration}
+          onGameComplete={handleGameComplete}
+        />
+      </div>
+    )
+  }
+
+  // Show home screen
   return (
     <div className="app">
       <div className="pause-control">

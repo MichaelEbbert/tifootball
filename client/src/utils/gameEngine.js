@@ -55,15 +55,19 @@ const GAME_CONSTANTS = {
 
 /**
  * Initialize game state
+ * @param {boolean} simplifiedMode - If true, runs only, no kicks, always go on 4th
  */
-export function initializeGame(homeTeam, awayTeam) {
-  logger.info(`Game initialized: ${awayTeam.name} @ ${homeTeam.name}`)
+export function initializeGame(homeTeam, awayTeam, simplifiedMode = false) {
+  logger.info(`Game initialized: ${awayTeam.name} @ ${homeTeam.name}${simplifiedMode ? ' (Simplified Mode)' : ''}`)
 
   return {
+    // Game mode
+    simplifiedMode,
+
     // Teams
     homeTeam,
     awayTeam,
-    possession: 'away', // Away team receives opening kickoff
+    possession: 'away', // Away team starts with ball
 
     // Score
     score: { home: 0, away: 0 },
@@ -73,7 +77,7 @@ export function initializeGame(homeTeam, awayTeam) {
     clock: QUARTER_LENGTH, // seconds remaining in quarter
     down: 1,
     distance: 10,
-    yardline: 25, // Starting field position after kickoff
+    yardline: 35, // Starting field position (own 35)
     ballOn: 'away', // Which team's side of field ('home' or 'away')
 
     // Play tracking
@@ -195,7 +199,14 @@ export function executePlay(gameState) {
  * Determine what play to call based on down, distance, field position
  */
 function determinePlayType(gameState) {
-  const { down, distance, yardline } = gameState
+  const { down, simplifiedMode } = gameState
+
+  // Simplified mode: always run, always go for it on 4th
+  if (simplifiedMode) {
+    return 'run'
+  }
+
+  const { distance, yardline } = gameState
 
   // 4th down logic
   if (down === 4) {
@@ -426,8 +437,17 @@ function updateDownAndDistance(gameState, yards) {
   if (gameState.yardline >= 100) {
     gameState.score[gameState.possession] += 6
     logger.info(`🏈 TOUCHDOWN! ${gameState.possession} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
-    attemptExtraPoint(gameState)
-    kickoff(gameState)
+
+    if (gameState.simplifiedMode) {
+      // Simplified mode: no kickoff, other team starts at own 35
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+      gameState.yardline = 35
+      gameState.down = 1
+      gameState.distance = 10
+    } else {
+      attemptExtraPoint(gameState)
+      kickoff(gameState)
+    }
     return
   }
 
@@ -501,7 +521,14 @@ function kickoff(gameState) {
  */
 function changePossession(gameState, fieldChange) {
   gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
-  gameState.yardline = 100 - (gameState.yardline + fieldChange)
+
+  if (gameState.simplifiedMode) {
+    // Simplified mode: always start at own 35
+    gameState.yardline = 35
+  } else {
+    gameState.yardline = 100 - (gameState.yardline + fieldChange)
+  }
+
   gameState.down = 1
   gameState.distance = 10
 }
