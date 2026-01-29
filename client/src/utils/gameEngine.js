@@ -177,9 +177,10 @@ export function executePlay(gameState) {
 
   // Update clock
   gameState.clock -= playTime
-  if (gameState.clock <= 0) {
+  if (gameState.clock <= 0 && gameState.quarter < 4) {
     advanceQuarter(gameState)
   }
+  // Q4 clock expiring ends the game (handled by isGameOver check)
 
   // Log the play
   gameState.playLog.push({
@@ -258,9 +259,11 @@ function executeRun(gameState) {
   // Check for fumble on running play (3%)
   if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_RUN) {
     if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
-      // Defense recovers - turnover
+      // Defense recovers - turnover at the spot of the fumble
       stats.fumblesLost++
-      logger.info(`💨 FUMBLE! ${gameState.possession} loses the ball`)
+      gameState.yardline += yards  // Move to fumble spot
+      logger.info(`💨 FUMBLE! ${gameState.possession} loses the ball at ${gameState.yardline}`)
+      changePossession(gameState, 0, true)  // Maintain field position
       return {
         type: 'run',
         yards: yards,
@@ -354,8 +357,11 @@ function executePass(gameState) {
     // Check for fumble after catch (2% for now, will use RAC fumble rate later)
     if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_PASS) {
       if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
-        // Defense recovers - turnover
+        // Defense recovers - turnover at the spot of the fumble
         stats.fumblesLost++
+        gameState.yardline += totalYards  // Move to fumble spot
+        logger.info(`💨 FUMBLE! ${gameState.possession} loses the ball at ${gameState.yardline}`)
+        changePossession(gameState, 0, true)  // Maintain field position
         return {
           type: 'pass',
           yards: totalYards,
@@ -525,8 +531,8 @@ function updateDownAndDistance(gameState, yards) {
     if (gameState.down === 4) stats.fourthDownAttempts++
 
     if (gameState.down > 4) {
-      // Turnover on downs
-      changePossession(gameState, 0)
+      // Turnover on downs - other team takes over at this spot
+      changePossession(gameState, 0, true)
     }
   }
 }
@@ -577,13 +583,14 @@ function kickoff(gameState) {
 /**
  * Change possession (turnover, punt, etc.)
  */
-function changePossession(gameState, fieldChange) {
+function changePossession(gameState, fieldChange, turnoverOnDowns = false) {
   gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
 
-  if (gameState.simplifiedMode) {
-    // Simplified mode: always start at own 35
+  if (gameState.simplifiedMode && !turnoverOnDowns) {
+    // Simplified mode: fumbles start at own 35
     gameState.yardline = 35
   } else {
+    // Turnover on downs or normal mode: maintain field position
     gameState.yardline = 100 - (gameState.yardline + fieldChange)
   }
 
@@ -598,9 +605,17 @@ function advanceQuarter(gameState) {
   gameState.quarter++
   gameState.clock = QUARTER_LENGTH
 
-  // Halftime - reverse possession
+  // Halftime - other team gets the ball
   if (gameState.quarter === 3) {
-    kickoff(gameState)
+    if (gameState.simplifiedMode) {
+      // Simplified mode: swap possession, start at own 35
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+      gameState.yardline = 35
+      gameState.down = 1
+      gameState.distance = 10
+    } else {
+      kickoff(gameState)
+    }
   }
 }
 
@@ -608,5 +623,6 @@ function advanceQuarter(gameState) {
  * Check if game is over
  */
 export function isGameOver(gameState) {
-  return gameState.quarter > 4
+  // Game ends when Q4 clock expires (or if somehow quarter > 4)
+  return gameState.quarter > 4 || (gameState.quarter === 4 && gameState.clock <= 0)
 }

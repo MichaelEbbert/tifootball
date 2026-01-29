@@ -17,6 +17,47 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
   const animationRef = useRef(null)
   const isPausedRef = useRef(isPaused)
 
+  // Debug panel state
+  const [debugMode, setDebugMode] = useState(false)
+  const [debugPrompt, setDebugPrompt] = useState(false)
+  const [debugPassword, setDebugPassword] = useState('')
+  const [debugOpen, setDebugOpen] = useState(false)
+  const [debugForm, setDebugForm] = useState({
+    fieldSide: 'own',  // 'own' or 'opp'
+    yardline: 35,
+    possession: 'home',
+    down: 1,
+    distance: 10,
+    quarter: 1,
+    clockMin: 15,
+    clockSec: 0
+  })
+
+  // Debug password hash (SHA-256 of the password)
+  const DEBUG_HASH = '715773c66c9347749f5921bdce502d7de7081e19d07c7b40a70f19665700d919'
+
+  // Hash function using Web Crypto API
+  async function hashPassword(password) {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(password)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+
+  async function checkDebugPassword() {
+    const hash = await hashPassword(debugPassword)
+    if (hash === DEBUG_HASH) {
+      setDebugMode(true)
+      setDebugPrompt(false)
+      setDebugPassword('')
+      logger.info('Debug mode enabled')
+    } else {
+      alert('Invalid password')
+      setDebugPassword('')
+    }
+  }
+
   // Keep isPausedRef in sync with isPaused state
   useEffect(() => {
     isPausedRef.current = isPaused
@@ -47,13 +88,18 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
 
   // Auto-save game state to localStorage whenever it changes
   useEffect(() => {
-    if (gameState && saveKey && !isGameOver(gameState)) {
-      const saveData = {
-        game,
-        gameState,
-        savedAt: Date.now()
+    if (gameState && saveKey) {
+      if (isGameOver(gameState)) {
+        // Game is over - clear the save so there's nothing to resume
+        localStorage.removeItem(saveKey)
+      } else {
+        const saveData = {
+          game,
+          gameState,
+          savedAt: Date.now()
+        }
+        localStorage.setItem(saveKey, JSON.stringify(saveData))
       }
-      localStorage.setItem(saveKey, JSON.stringify(saveData))
     }
   }, [gameState, game, saveKey])
 
@@ -162,6 +208,35 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     animationRef.current = setTimeout(showNextStep, stepDelay)
   }
 
+  // Apply debug settings to game state
+  function applyDebugSettings() {
+    if (!gameState) return
+
+    const newState = JSON.parse(JSON.stringify(gameState))
+
+    // Convert field position: 'own 35' = 35, 'opp 35' = 65
+    if (debugForm.fieldSide === 'own') {
+      newState.yardline = debugForm.yardline
+    } else {
+      newState.yardline = 100 - debugForm.yardline
+    }
+
+    newState.possession = debugForm.possession
+    newState.down = debugForm.down
+    newState.distance = debugForm.distance
+    newState.quarter = debugForm.quarter
+    newState.clock = debugForm.clockMin * 60 + debugForm.clockSec
+
+    setGameState(newState)
+    setCurrentPlay(null)
+    setPrePlayState(null)
+    setAnimationPhase('idle')
+    setIsPaused(true)
+    setDebugOpen(false)
+
+    logger.info(`Debug: Set game state - Q${newState.quarter} ${formatGameClock(newState.clock)}, ${newState.possession} ball, ${newState.down}&${newState.distance} at ${newState.yardline}`)
+  }
+
   if (!gameState) {
     return <div className="game-display">Loading game...</div>
   }
@@ -240,7 +315,133 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             I'm going fast again!
           </label>
         </div>
+        {debugMode ? (
+          <button
+            className="debug-toggle-btn"
+            onClick={() => setDebugOpen(!debugOpen)}
+          >
+            {debugOpen ? 'Close Debug' : 'Debug'}
+          </button>
+        ) : (
+          <button
+            className="debug-enter-btn"
+            onClick={() => setDebugPrompt(true)}
+            title="Enter Debug Mode"
+          >
+            🔧
+          </button>
+        )}
       </div>
+
+      {/* Debug Password Prompt */}
+      {debugPrompt && (
+        <div className="debug-prompt-overlay">
+          <div className="debug-prompt">
+            <h3>Enter Debug Mode</h3>
+            <input
+              type="password"
+              value={debugPassword}
+              onChange={(e) => setDebugPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && checkDebugPassword()}
+              placeholder="Password"
+              autoFocus
+            />
+            <div className="debug-prompt-buttons">
+              <button onClick={checkDebugPassword}>Enter</button>
+              <button onClick={() => { setDebugPrompt(false); setDebugPassword(''); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Panel */}
+      {debugOpen && (
+        <div className="debug-panel">
+          <h3>Test Scenario</h3>
+          <div className="debug-form">
+            <div className="debug-row">
+              <label>Field Position:</label>
+              <select
+                value={debugForm.fieldSide}
+                onChange={(e) => setDebugForm({...debugForm, fieldSide: e.target.value})}
+              >
+                <option value="own">OWN</option>
+                <option value="opp">OPP</option>
+              </select>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={debugForm.yardline}
+                onChange={(e) => setDebugForm({...debugForm, yardline: parseInt(e.target.value) || 1})}
+              />
+            </div>
+            <div className="debug-row">
+              <label>Possession:</label>
+              <select
+                value={debugForm.possession}
+                onChange={(e) => setDebugForm({...debugForm, possession: e.target.value})}
+              >
+                <option value="home">{gameState?.homeTeam?.name || 'Home'}</option>
+                <option value="away">{gameState?.awayTeam?.name || 'Away'}</option>
+              </select>
+            </div>
+            <div className="debug-row">
+              <label>Down & Distance:</label>
+              <select
+                value={debugForm.down}
+                onChange={(e) => setDebugForm({...debugForm, down: parseInt(e.target.value)})}
+              >
+                <option value={1}>1st</option>
+                <option value={2}>2nd</option>
+                <option value={3}>3rd</option>
+                <option value={4}>4th</option>
+              </select>
+              <span>&</span>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={debugForm.distance}
+                onChange={(e) => setDebugForm({...debugForm, distance: parseInt(e.target.value) || 1})}
+              />
+            </div>
+            <div className="debug-row">
+              <label>Quarter:</label>
+              <select
+                value={debugForm.quarter}
+                onChange={(e) => setDebugForm({...debugForm, quarter: parseInt(e.target.value)})}
+              >
+                <option value={1}>Q1</option>
+                <option value={2}>Q2</option>
+                <option value={3}>Q3</option>
+                <option value={4}>Q4</option>
+              </select>
+            </div>
+            <div className="debug-row">
+              <label>Clock:</label>
+              <input
+                type="number"
+                min="0"
+                max="15"
+                value={debugForm.clockMin}
+                onChange={(e) => setDebugForm({...debugForm, clockMin: parseInt(e.target.value) || 0})}
+              />
+              <span>:</span>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={debugForm.clockSec}
+                onChange={(e) => setDebugForm({...debugForm, clockSec: parseInt(e.target.value) || 0})}
+              />
+            </div>
+            <button className="debug-apply-btn" onClick={applyDebugSettings}>
+              Apply & Pause
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Scoreboard */}
       <div className="scoreboard">
