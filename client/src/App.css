@@ -1,0 +1,43 @@
+.app {
+  text-align: center;
+}
+
+.scoreboard {
+  background-color: #1a1a1a;
+  color: #00ff00;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-family: 'Courier New', monospace;
+}
+
+.score {
+  display: flex;
+  justify-content: space-around;
+  font-size: 2em;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.game-info {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  font-size: 1.2em;
+}
+
+.field-position {
+  background-color: #f0f0f0;
+  padding: 15px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  font-size: 1.1em;
+}
+
+.play-result {
+  min-height: 100px;
+  padding: 20px;
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #0066cc;
+}
