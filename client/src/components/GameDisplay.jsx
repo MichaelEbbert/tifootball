@@ -10,12 +10,14 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
   const [prePlayState, setPrePlayState] = useState(null) // Snapshot before play executes
   const [isSimulating, setIsSimulating] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
 
   // Animation states
   const [animationPhase, setAnimationPhase] = useState('idle') // 'idle', 'running', 'result', 'touchdown'
   const [runningText, setRunningText] = useState('')
   const animationRef = useRef(null)
   const isPausedRef = useRef(isPaused)
+  const gameStateRef = useRef(gameState)  // Track current gameState to avoid closure issues
 
   // Debug panel state
   const [debugMode, setDebugMode] = useState(false)
@@ -30,7 +32,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     distance: 10,
     quarter: 1,
     clockMin: 15,
-    clockSec: 0
+    clockSec: 0,
+    nextPlay: 'auto'  // 'auto', 'run', 'short', 'medium'
   })
 
   // Debug password hash (SHA-256 of the password)
@@ -58,10 +61,43 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     }
   }
 
-  // Keep isPausedRef in sync with isPaused state
+  // Go to game summary and save results
+  function goToSummary() {
+    if (!gameState) return
+
+    // Save game results (placeholder - will be implemented later)
+    saveGameResults(gameState)
+
+    setShowSummary(true)
+    logger.info('Viewing game summary')
+  }
+
+  // Placeholder: Save game results to database
+  async function saveGameResults(finalState) {
+    // TODO: POST to /api/games with game results
+    // - Update team wins/losses/ties
+    // - Save game stats
+    logger.info('TODO: Save game results to database')
+    logger.info(`  Final score: ${finalState.homeTeam.name} ${finalState.score.home} - ${finalState.awayTeam.name} ${finalState.score.away}`)
+
+    // Determine winner
+    if (finalState.score.home > finalState.score.away) {
+      logger.info(`  Winner: ${finalState.homeTeam.name}`)
+    } else if (finalState.score.away > finalState.score.home) {
+      logger.info(`  Winner: ${finalState.awayTeam.name}`)
+    } else {
+      logger.info('  Result: Tie')
+    }
+  }
+
+  // Keep refs in sync with state
   useEffect(() => {
     isPausedRef.current = isPaused
   }, [isPaused])
+
+  useEffect(() => {
+    gameStateRef.current = gameState
+  }, [gameState])
 
   useEffect(() => {
     // Initialize game when component mounts - either from saved state or fresh
@@ -103,12 +139,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     }
   }, [gameState, game, saveKey])
 
-  // Cancel animations when paused
-  useEffect(() => {
-    if (isPaused && animationRef.current) {
-      clearTimeout(animationRef.current)
-    }
-  }, [isPaused])
+  // Note: We no longer cancel animations when paused - the animation loop
+  // polls isPausedRef and waits until resumed
 
   useEffect(() => {
     if (!isSimulating || !gameState || isGameOver(gameState) || isPaused || animationPhase !== 'idle') {
@@ -136,19 +168,31 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
       // If it's a run with steps, animate it
       if (playResult.type === 'run' && playResult.steps && playResult.steps.length > 0) {
         animateRunningPlay(playResult, gameState)
+      } else if (playResult.type === 'pass' && playResult.complete && playResult.racSteps && playResult.racSteps.length > 0) {
+        // Completed pass with run after catch - animate it
+        animatePassPlay(playResult, gameState)
       } else {
         // Non-running play or no steps, show result directly
         // Deep copy to ensure React sees the change
+        // Preserve user settings (rotationMode) from current state in case user toggled mid-play
         const newState = JSON.parse(JSON.stringify(gameState))
+        if (gameStateRef.current) {
+          newState.rotationMode = gameStateRef.current.rotationMode
+          newState.rotationIndex = gameStateRef.current.rotationIndex
+        }
         setGameState(newState)
         setAnimationPhase('result')
 
         // After showing result, return to idle and clear prePlayState
-        animationRef.current = setTimeout(() => {
-          if (isPausedRef.current) return
+        const finishNonRunPlay = () => {
+          if (isPausedRef.current) {
+            animationRef.current = setTimeout(finishNonRunPlay, 100)
+            return
+          }
           setPrePlayState(null)
           setAnimationPhase('idle')
-        }, pauseDuration * 1000)
+        }
+        animationRef.current = setTimeout(finishNonRunPlay, pauseDuration * 1000)
       }
     }, pauseDuration * 1000)
 
@@ -164,9 +208,10 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     const stepDelay = pauseDuration < 1 ? 50 : 500
 
     function showNextStep() {
-      // Check if paused before each step
+      // Check if paused - keep polling instead of exiting
       if (isPausedRef.current) {
-        return // Stop animation, will resume when unpaused
+        animationRef.current = setTimeout(showNextStep, 100) // Poll every 100ms
+        return
       }
 
       if (stepIndex < steps.length) {
@@ -176,35 +221,123 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
         animationRef.current = setTimeout(showNextStep, stepDelay)
       } else {
         // Animation complete - create deep copy of mutated state to trigger React update
+        // Preserve user settings (rotationMode) from current state in case user toggled mid-play
         const newState = JSON.parse(JSON.stringify(mutatedGameState))
+        if (gameStateRef.current) {
+          newState.rotationMode = gameStateRef.current.rotationMode
+          newState.rotationIndex = gameStateRef.current.rotationIndex
+        }
         setGameState(newState)
         setAnimationPhase('result')
 
         // Check for touchdown
         if (playResult.touchdown) {
-          animationRef.current = setTimeout(() => {
-            if (isPausedRef.current) return
+          const showTouchdown = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(showTouchdown, 100)
+              return
+            }
             setAnimationPhase('touchdown')
             // Touchdown pause is 5x normal
-            animationRef.current = setTimeout(() => {
-              if (isPausedRef.current) return
+            const finishTouchdown = () => {
+              if (isPausedRef.current) {
+                animationRef.current = setTimeout(finishTouchdown, 100)
+                return
+              }
               setPrePlayState(null)
               setAnimationPhase('idle')
-            }, pauseDuration * 5 * 1000)
-          }, 500)
+            }
+            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+          }
+          animationRef.current = setTimeout(showTouchdown, 500)
         } else {
           // Normal pause after result, then clear prePlayState
-          animationRef.current = setTimeout(() => {
-            if (isPausedRef.current) return
+          const finishPlay = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(finishPlay, 100)
+              return
+            }
             setPrePlayState(null)
             setAnimationPhase('idle')
-          }, pauseDuration * 1000)
+          }
+          animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
         }
       }
     }
 
     // Start with "Running..."
     setRunningText('Running...')
+    animationRef.current = setTimeout(showNextStep, stepDelay)
+  }
+
+  function animatePassPlay(playResult, mutatedGameState) {
+    setAnimationPhase('running')
+    const steps = playResult.racSteps
+    const passType = playResult.passType || 'Short'
+    const passTypeCap = passType.charAt(0).toUpperCase() + passType.slice(1)
+    let stepIndex = 0
+
+    // Animation speed: 0.5 second per yard, or 50ms in fast mode
+    const stepDelay = pauseDuration < 1 ? 50 : 500
+
+    function showNextStep() {
+      // Check if paused - keep polling instead of exiting
+      if (isPausedRef.current) {
+        animationRef.current = setTimeout(showNextStep, 100)
+        return
+      }
+
+      if (stepIndex < steps.length) {
+        const yardsText = steps.slice(0, stepIndex + 1).map(y => `...${y}`).join(' ')
+        setRunningText(`${passTypeCap} pass complete for ${playResult.airYards} yards, running ${yardsText}`)
+        stepIndex++
+        animationRef.current = setTimeout(showNextStep, stepDelay)
+      } else {
+        // Animation complete
+        const newState = JSON.parse(JSON.stringify(mutatedGameState))
+        if (gameStateRef.current) {
+          newState.rotationMode = gameStateRef.current.rotationMode
+          newState.rotationIndex = gameStateRef.current.rotationIndex
+        }
+        setGameState(newState)
+        setRunningText(`${passTypeCap} pass complete for ${playResult.airYards} yards, running ${steps.map(y => `...${y}`).join(' ')} Tackled for a gain of ${playResult.yards} yards`)
+        setAnimationPhase('result')
+
+        // Check for touchdown
+        if (playResult.touchdown) {
+          const showTouchdown = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(showTouchdown, 100)
+              return
+            }
+            setAnimationPhase('touchdown')
+            const finishTouchdown = () => {
+              if (isPausedRef.current) {
+                animationRef.current = setTimeout(finishTouchdown, 100)
+                return
+              }
+              setPrePlayState(null)
+              setAnimationPhase('idle')
+            }
+            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+          }
+          animationRef.current = setTimeout(showTouchdown, 500)
+        } else {
+          const finishPlay = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(finishPlay, 100)
+              return
+            }
+            setPrePlayState(null)
+            setAnimationPhase('idle')
+          }
+          animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
+        }
+      }
+    }
+
+    // Start with pass complete message
+    setRunningText(`${passTypeCap} pass complete for ${playResult.airYards} yards, running...`)
     animationRef.current = setTimeout(showNextStep, stepDelay)
   }
 
@@ -227,6 +360,13 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     newState.quarter = debugForm.quarter
     newState.clock = debugForm.clockMin * 60 + debugForm.clockSec
 
+    // Set forced play type for next play (if not 'auto')
+    if (debugForm.nextPlay !== 'auto') {
+      newState.forcedPlayType = debugForm.nextPlay
+    } else {
+      delete newState.forcedPlayType
+    }
+
     setGameState(newState)
     setCurrentPlay(null)
     setPrePlayState(null)
@@ -239,6 +379,118 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
 
   if (!gameState) {
     return <div className="game-display">Loading game...</div>
+  }
+
+  // Game Summary Screen
+  if (showSummary) {
+    return (
+      <div className="game-display">
+        <div className="game-summary">
+          <h1>Game Summary</h1>
+
+          {/* Final Score */}
+          <div className="game-over">
+            <h2>FINAL</h2>
+            <div className="final-score">
+              {gameState.homeTeam.name} {gameState.score.home} - {gameState.awayTeam.name} {gameState.score.away}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="stats-container">
+            <div className="team-stats">
+              <h3>{gameState.homeTeam.name}</h3>
+              <div className="stat-line">
+                <span>Rushing:</span>
+                <span>{gameState.homeStats.rushingAttempts} car, {gameState.homeStats.rushingYards} yds, {gameState.homeStats.rushingFumbles} fum, {gameState.homeStats.rushingFumblesLost} lost</span>
+              </div>
+              <div className="stat-line">
+                <span>Passing:</span>
+                <span>{gameState.homeStats.passAttempts} att, {gameState.homeStats.passCompletions} cmp, {gameState.homeStats.passYards} yds, {gameState.homeStats.passRacYards} rac, {gameState.homeStats.passInterceptions} int, {gameState.homeStats.passTouchdowns} td</span>
+              </div>
+              <div className="stat-line">
+                <span>Sacked:</span>
+                <span>{gameState.homeStats.sacks} for {gameState.homeStats.sackYardsLost} yards</span>
+              </div>
+              <div className="stat-line">
+                <span>First Downs:</span>
+                <span>{gameState.homeStats.firstDowns}</span>
+              </div>
+              <div className="stat-line">
+                <span>3rd Down:</span>
+                <span>{gameState.homeStats.thirdDownConversions}/{gameState.homeStats.thirdDownAttempts}</span>
+              </div>
+              <div className="stat-line">
+                <span>4th Down:</span>
+                <span>{gameState.homeStats.fourthDownConversions}/{gameState.homeStats.fourthDownAttempts}</span>
+              </div>
+              <div className="stat-line">
+                <span>XP:</span>
+                <span>{gameState.homeStats.xpMade}/{gameState.homeStats.xpAttempted}</span>
+              </div>
+              <div className="stat-line">
+                <span>2-PT:</span>
+                <span>{gameState.homeStats.twoPtMade || 0}/{gameState.homeStats.twoPtAttempted || 0}</span>
+              </div>
+              <div className="stat-line">
+                <span>Time of Possession:</span>
+                <span>{formatGameClock(gameState.homeStats.timeOfPossession)}</span>
+              </div>
+            </div>
+
+            <div className="team-stats">
+              <h3>{gameState.awayTeam.name}</h3>
+              <div className="stat-line">
+                <span>Rushing:</span>
+                <span>{gameState.awayStats.rushingAttempts} car, {gameState.awayStats.rushingYards} yds, {gameState.awayStats.rushingFumbles} fum, {gameState.awayStats.rushingFumblesLost} lost</span>
+              </div>
+              <div className="stat-line">
+                <span>Passing:</span>
+                <span>{gameState.awayStats.passAttempts} att, {gameState.awayStats.passCompletions} cmp, {gameState.awayStats.passYards} yds, {gameState.awayStats.passRacYards} rac, {gameState.awayStats.passInterceptions} int, {gameState.awayStats.passTouchdowns} td</span>
+              </div>
+              <div className="stat-line">
+                <span>Sacked:</span>
+                <span>{gameState.awayStats.sacks} for {gameState.awayStats.sackYardsLost} yards</span>
+              </div>
+              <div className="stat-line">
+                <span>First Downs:</span>
+                <span>{gameState.awayStats.firstDowns}</span>
+              </div>
+              <div className="stat-line">
+                <span>3rd Down:</span>
+                <span>{gameState.awayStats.thirdDownConversions}/{gameState.awayStats.thirdDownAttempts}</span>
+              </div>
+              <div className="stat-line">
+                <span>4th Down:</span>
+                <span>{gameState.awayStats.fourthDownConversions}/{gameState.awayStats.fourthDownAttempts}</span>
+              </div>
+              <div className="stat-line">
+                <span>XP:</span>
+                <span>{gameState.awayStats.xpMade}/{gameState.awayStats.xpAttempted}</span>
+              </div>
+              <div className="stat-line">
+                <span>2-PT:</span>
+                <span>{gameState.awayStats.twoPtMade || 0}/{gameState.awayStats.twoPtAttempted || 0}</span>
+              </div>
+              <div className="stat-line">
+                <span>Time of Possession:</span>
+                <span>{formatGameClock(gameState.awayStats.timeOfPossession)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="summary-buttons">
+            <button className="next-game-btn" onClick={() => onNextGame && onNextGame(gameState)}>
+              Continue to Next Game
+            </button>
+            <button className="done-btn" onClick={() => onDone && onDone(gameState)}>
+              Done for Now
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Determine what to show in play result area
@@ -315,6 +567,22 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             I'm going fast again!
           </label>
         </div>
+        <button
+          className={`rotation-btn ${gameState?.rotationMode ? 'active' : ''}`}
+          onClick={() => {
+            if (gameState) {
+              const newState = JSON.parse(JSON.stringify(gameState))
+              newState.rotationMode = !newState.rotationMode
+              if (newState.rotationMode) {
+                newState.rotationIndex = 0  // Reset rotation when enabling
+              }
+              setGameState(newState)
+            }
+          }}
+          title="Rotation Mode: 3 runs, 3 short passes, 3 medium passes, repeat"
+        >
+          {gameState?.rotationMode ? '🔄 Rotation ON' : '🔄 Rotation'}
+        </button>
         {debugMode ? (
           <button
             className="debug-toggle-btn"
@@ -436,6 +704,19 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 onChange={(e) => setDebugForm({...debugForm, clockSec: parseInt(e.target.value) || 0})}
               />
             </div>
+            <div className="debug-row">
+              <label>Next Play:</label>
+              <select
+                value={debugForm.nextPlay}
+                onChange={(e) => setDebugForm({...debugForm, nextPlay: e.target.value})}
+              >
+                <option value="auto">Auto (normal logic)</option>
+                <option value="run">Run</option>
+                <option value="short">Short Pass (0-9 air)</option>
+                <option value="medium">Medium Pass (10-19 air)</option>
+                <option value="long">Long Pass (20+ air)</option>
+              </select>
+            </div>
             <button className="debug-apply-btn" onClick={applyDebugSettings}>
               Apply & Pause
             </button>
@@ -488,11 +769,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             {gameState.homeTeam.name} {gameState.score.home} - {gameState.awayTeam.name} {gameState.score.away}
           </div>
           <div className="game-over-buttons">
-            <button className="next-game-btn" onClick={() => onNextGame && onNextGame(gameState)}>
-              Continue to Next Game
-            </button>
-            <button className="done-btn" onClick={() => onDone && onDone(gameState)}>
-              Done for Now
+            <button className="next-game-btn" onClick={goToSummary}>
+              Go to Game Summary
             </button>
           </div>
         </div>
@@ -504,7 +782,15 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
           <h3>{gameState.homeTeam.name}</h3>
           <div className="stat-line">
             <span>Rushing:</span>
-            <span>{gameState.homeStats.runningPlays} carries, {gameState.homeStats.runningYards} yards</span>
+            <span>{gameState.homeStats.rushingAttempts} car, {gameState.homeStats.rushingYards} yds, {gameState.homeStats.rushingFumbles} fum, {gameState.homeStats.rushingFumblesLost} lost</span>
+          </div>
+          <div className="stat-line">
+            <span>Passing:</span>
+            <span>{gameState.homeStats.passAttempts} att, {gameState.homeStats.passCompletions} cmp, {gameState.homeStats.passYards} yds, {gameState.homeStats.passRacYards} rac, {gameState.homeStats.passInterceptions} int, {gameState.homeStats.passTouchdowns} td</span>
+          </div>
+          <div className="stat-line">
+            <span>Sacked:</span>
+            <span>{gameState.homeStats.sacks} for {gameState.homeStats.sackYardsLost} yards</span>
           </div>
           <div className="stat-line">
             <span>First Downs:</span>
@@ -519,8 +805,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             <span>{gameState.homeStats.fourthDownConversions}/{gameState.homeStats.fourthDownAttempts}</span>
           </div>
           <div className="stat-line">
-            <span>Turnovers:</span>
-            <span>{gameState.homeStats.fumblesLost}</span>
+            <span>XP:</span>
+            <span>{gameState.homeStats.xpMade}/{gameState.homeStats.xpAttempted}</span>
+          </div>
+          <div className="stat-line">
+            <span>2-PT:</span>
+            <span>{gameState.homeStats.twoPtMade || 0}/{gameState.homeStats.twoPtAttempted || 0}</span>
           </div>
           <div className="stat-line">
             <span>Time of Possession:</span>
@@ -532,7 +822,15 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
           <h3>{gameState.awayTeam.name}</h3>
           <div className="stat-line">
             <span>Rushing:</span>
-            <span>{gameState.awayStats.runningPlays} carries, {gameState.awayStats.runningYards} yards</span>
+            <span>{gameState.awayStats.rushingAttempts} car, {gameState.awayStats.rushingYards} yds, {gameState.awayStats.rushingFumbles} fum, {gameState.awayStats.rushingFumblesLost} lost</span>
+          </div>
+          <div className="stat-line">
+            <span>Passing:</span>
+            <span>{gameState.awayStats.passAttempts} att, {gameState.awayStats.passCompletions} cmp, {gameState.awayStats.passYards} yds, {gameState.awayStats.passRacYards} rac, {gameState.awayStats.passInterceptions} int, {gameState.awayStats.passTouchdowns} td</span>
+          </div>
+          <div className="stat-line">
+            <span>Sacked:</span>
+            <span>{gameState.awayStats.sacks} for {gameState.awayStats.sackYardsLost} yards</span>
           </div>
           <div className="stat-line">
             <span>First Downs:</span>
@@ -547,8 +845,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             <span>{gameState.awayStats.fourthDownConversions}/{gameState.awayStats.fourthDownAttempts}</span>
           </div>
           <div className="stat-line">
-            <span>Turnovers:</span>
-            <span>{gameState.awayStats.fumblesLost}</span>
+            <span>XP:</span>
+            <span>{gameState.awayStats.xpMade}/{gameState.awayStats.xpAttempted}</span>
+          </div>
+          <div className="stat-line">
+            <span>2-PT:</span>
+            <span>{gameState.awayStats.twoPtMade || 0}/{gameState.awayStats.twoPtAttempted || 0}</span>
           </div>
           <div className="stat-line">
             <span>Time of Possession:</span>

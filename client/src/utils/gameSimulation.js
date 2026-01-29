@@ -34,6 +34,28 @@ export function generatePlayTime() {
 }
 
 /**
+ * Generate air yards for a pass based on pass type
+ * Uses normal distribution with hard limits
+ *
+ * @param {string} passType - 'short', 'medium', or 'long'
+ * @returns {number} Air yards (integer)
+ */
+export function generateAirYards(passType) {
+  // Mean and limits for each pass type
+  const config = {
+    short: { mean: 4, stdDev: 2, min: 0, max: 9 },
+    medium: { mean: 14, stdDev: 2.5, min: 10, max: 19 },
+    long: { mean: 30, stdDev: 8, min: 20, max: 50 }  // TBD - placeholder for now
+  }
+
+  const { mean, stdDev, min, max } = config[passType] || config.short
+
+  // Generate from normal distribution and clamp to hard limits
+  const yards = randomNormal(mean, stdDev)
+  return Math.max(min, Math.min(max, Math.round(yards)))
+}
+
+/**
  * Running algorithm from original 1979 game
  * Player picks 1-4, computer picks 1-5 (or 1-4 on 4th and 1)
  * Match = tackled, no match = advance 1 yard and repeat

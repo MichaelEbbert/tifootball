@@ -7,6 +7,7 @@ import {
   generatePlayTime,
   runningPlay,
   runAfterCatch,
+  generateAirYards,
   formatGameClock,
   QUARTER_LENGTH
 } from './gameSimulation.js'
@@ -17,10 +18,17 @@ import logger from './logger.js'
  * See game-design-decisions.md for full documentation
  */
 const GAME_CONSTANTS = {
-  // Passing
-  PASS_COMPLETION: { short: 0.70, medium: 0.60, long: 0.45 },
-  PASS_INTERCEPTION: { short: 0.02, medium: 0.03, long: 0.05 },
-  AIR_YARDS: { short: [5, 10], medium: [11, 20], long: [21, 40] },
+  // Passing (by air yards: short 0-9, medium 10-19, long 20+)
+  PASS_COMPLETION: { short: 0.70, medium: 0.58, long: 0.42 },
+  PASS_INTERCEPTION: { short: 0.02, medium: 0.03, long: 0.06 },
+  // Air yards generated via normal distribution with these means
+  AIR_YARDS_MEAN: { short: 4, medium: 14 },  // long TBD
+  AIR_YARDS_RANGE: { short: [0, 9], medium: [10, 19], long: [20, 50] },
+
+  // Sacks (checked before completion/interception)
+  SACK_RATE: { short: 0.04, medium: 0.07, long: 0.10 },  // Mean: 7%
+  SACK_FUMBLE_RATE: 0.18,      // 18% of sacks cause fumble
+  SACK_FUMBLE_LOST: 0.47,      // 47% of sack fumbles lost to defense
 
   // Fumbles
   FUMBLE_RATE_RUN: 0.03,    // 3% on running plays
@@ -55,15 +63,24 @@ const GAME_CONSTANTS = {
 }
 
 /**
+ * Play rotation pattern for "game tape" mode
+ * 3 runs, 3 short passes, 3 medium passes, repeat
+ */
+const PLAY_ROTATION = ['run', 'run', 'run', 'short', 'short', 'short', 'medium', 'medium', 'medium']
+
+/**
  * Initialize game state
  * @param {boolean} simplifiedMode - If true, runs only, no kicks, always go on 4th
+ * @param {boolean} rotationMode - If true, use fixed play rotation (3 run, 3 short, 3 medium)
  */
-export function initializeGame(homeTeam, awayTeam, simplifiedMode = false) {
-  logger.info(`Game initialized: ${awayTeam.name} @ ${homeTeam.name}${simplifiedMode ? ' (Simplified Mode)' : ''}`)
+export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotationMode = false) {
+  logger.info(`Game initialized: ${awayTeam.name} @ ${homeTeam.name}${simplifiedMode ? ' (Simplified Mode)' : ''}${rotationMode ? ' (Rotation Mode)' : ''}`)
 
   return {
     // Game mode
     simplifiedMode,
+    rotationMode,
+    rotationIndex: 0,  // Current position in play rotation
 
     // Teams
     homeTeam,
@@ -87,17 +104,34 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false) {
 
     // Stats - Home Team
     homeStats: {
-      runningPlays: 0,
-      runningYards: 0,
-      passPlays: 0,
+      // Rushing
+      rushingAttempts: 0,
+      rushingYards: 0,
+      rushingFumbles: 0,
+      rushingFumblesLost: 0,
+      rushingTouchdowns: 0,
+      // Passing
+      passAttempts: 0,
+      passCompletions: 0,
       passYards: 0,
+      passRacYards: 0,
+      passInterceptions: 0,
+      passTouchdowns: 0,
+      // Sacks
+      sacks: 0,
+      sackYardsLost: 0,
+      sackFumbles: 0,
+      sackFumblesLost: 0,
+      // Receiving fumbles
+      recFumbles: 0,
+      recFumblesLost: 0,
+      //Downs
       firstDowns: 0,
       thirdDownAttempts: 0,
       thirdDownConversions: 0,
       fourthDownAttempts: 0,
       fourthDownConversions: 0,
-      fumblesLost: 0,
-      interceptionsLost: 0,
+      // Other
       timeOfPossession: 0,
       kickReturnYards: 0,
       puntReturnYards: 0,
@@ -105,22 +139,41 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false) {
       fgAttempted: 0,
       fgMade: 0,
       xpAttempted: 0,
-      xpMade: 0
+      xpMade: 0,
+      twoPtAttempted: 0,
+      twoPtMade: 0
     },
 
     // Stats - Away Team
     awayStats: {
-      runningPlays: 0,
-      runningYards: 0,
-      passPlays: 0,
+      // Rushing
+      rushingAttempts: 0,
+      rushingYards: 0,
+      rushingFumbles: 0,
+      rushingFumblesLost: 0,
+      rushingTouchdowns: 0,
+      // Passing
+      passAttempts: 0,
+      passCompletions: 0,
       passYards: 0,
+      passRacYards: 0,
+      passInterceptions: 0,
+      passTouchdowns: 0,
+      // Sacks
+      sacks: 0,
+      sackYardsLost: 0,
+      sackFumbles: 0,
+      sackFumblesLost: 0,
+      // Receiving fumbles
+      recFumbles: 0,
+      recFumblesLost: 0,
+      // Downs
       firstDowns: 0,
       thirdDownAttempts: 0,
       thirdDownConversions: 0,
       fourthDownAttempts: 0,
       fourthDownConversions: 0,
-      fumblesLost: 0,
-      interceptionsLost: 0,
+      // Other
       timeOfPossession: 0,
       kickReturnYards: 0,
       puntReturnYards: 0,
@@ -128,7 +181,9 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false) {
       fgAttempted: 0,
       fgMade: 0,
       xpAttempted: 0,
-      xpMade: 0
+      xpMade: 0,
+      twoPtAttempted: 0,
+      twoPtMade: 0
     }
   }
 }
@@ -164,6 +219,15 @@ export function executePlay(gameState) {
       break
     case 'pass':
       playResult = executePass(gameState)
+      break
+    case 'short':
+      playResult = executePass(gameState, 'short')
+      break
+    case 'medium':
+      playResult = executePass(gameState, 'medium')
+      break
+    case 'long':
+      playResult = executePass(gameState, 'long')
       break
     case 'punt':
       playResult = executePunt(gameState)
@@ -201,6 +265,20 @@ export function executePlay(gameState) {
  * Determine what play to call based on down, distance, field position
  */
 function determinePlayType(gameState) {
+  // Check for debug-forced play type
+  if (gameState.forcedPlayType) {
+    const forced = gameState.forcedPlayType
+    delete gameState.forcedPlayType  // Clear after use (one play only)
+    return forced
+  }
+
+  // Rotation mode: cycle through run, short pass, medium pass
+  if (gameState.rotationMode) {
+    const playType = PLAY_ROTATION[gameState.rotationIndex]
+    gameState.rotationIndex = (gameState.rotationIndex + 1) % PLAY_ROTATION.length
+    return playType
+  }
+
   const { down, simplifiedMode } = gameState
 
   // Simplified mode: always run, always go for it on 4th
@@ -247,22 +325,23 @@ function determinePlayType(gameState) {
  */
 function executeRun(gameState) {
   const stats = getStats(gameState, gameState.possession)
-  stats.runningPlays++
+  stats.rushingAttempts++
 
   // 4th and 1 uses tighter defense (1-4 vs 1-4 instead of 1-4 vs 1-5)
   const isFourthAndOne = gameState.down === 4 && gameState.distance === 1
   const runResult = runningPlay({ fourthAndOne: isFourthAndOne })
   const yards = runResult.yards
   const steps = runResult.steps
-  stats.runningYards += yards
+  stats.rushingYards += yards
 
   // Check for fumble on running play (3%)
   if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_RUN) {
+    stats.rushingFumbles++
     if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
       // Defense recovers - turnover at the spot of the fumble
-      stats.fumblesLost++
+      stats.rushingFumblesLost++
       gameState.yardline += yards  // Move to fumble spot
-      logger.info(`💨 FUMBLE! ${gameState.possession} loses the ball at ${gameState.yardline}`)
+      logger.info(`FUMBLE! ${gameState.possession} loses the ball at ${gameState.yardline}`)
       changePossession(gameState, 0, true)  // Maintain field position
       return {
         type: 'run',
@@ -274,7 +353,7 @@ function executeRun(gameState) {
       }
     } else {
       // Offense recovers - no turnover but play ends
-      logger.info(`💨 FUMBLE! ${gameState.possession} recovers`)
+      logger.info(`FUMBLE! ${gameState.possession} recovers`)
       updateDownAndDistance(gameState, yards)
       return {
         type: 'run',
@@ -289,6 +368,9 @@ function executeRun(gameState) {
 
   // Check if this will be a touchdown before updating
   const isTouchdown = gameState.yardline + yards >= 100
+  if (isTouchdown) {
+    stats.rushingTouchdowns++
+  }
 
   updateDownAndDistance(gameState, yards)
 
@@ -312,55 +394,122 @@ function executeRun(gameState) {
 
 /**
  * Execute passing play
+ * @param {Object} gameState - Current game state
+ * @param {string} forcedType - Optional forced pass type ('short', 'medium', 'long')
  */
-function executePass(gameState) {
+function executePass(gameState, forcedType = null) {
   const stats = getStats(gameState, gameState.possession)
-  stats.passPlays++
+  stats.passAttempts++
 
-  // Determine pass type based on distance needed
+  // Determine pass type based on distance needed (or use forced type)
+  // Short (0-9 air yards): for short yardage situations
+  // Medium (10-19 air yards): for moderate gains
+  // Long (20+ air yards): for big plays
   let passType
-  if (gameState.distance <= 5) passType = 'short'
-  else if (gameState.distance <= 15) passType = 'medium'
-  else passType = 'long'
+  if (forcedType) {
+    passType = forcedType
+  } else if (gameState.distance <= 5) {
+    passType = 'short'
+  } else if (gameState.distance <= 15) {
+    passType = 'medium'
+  } else {
+    passType = 'long'
+  }
 
-  // Check for interception
+  // Check for sack (longer developing passes = higher sack rate)
+  if (Math.random() < GAME_CONSTANTS.SACK_RATE[passType]) {
+    // Sack! Lose 3-10 yards
+    const sackYards = Math.floor(Math.random() * 8) + 3  // 3-10 yards lost
+    stats.sacks++
+    stats.sackYardsLost += sackYards
+
+    // Check for strip sack (18% of sacks cause fumble)
+    if (Math.random() < GAME_CONSTANTS.SACK_FUMBLE_RATE) {
+      stats.sackFumbles++
+      if (Math.random() < GAME_CONSTANTS.SACK_FUMBLE_LOST) {
+        // Defense recovers - turnover!
+        stats.sackFumblesLost++
+        gameState.yardline -= sackYards  // Move back from sack
+        logger.info(`STRIP SACK! ${gameState.possession} loses the ball at ${gameState.yardline}`)
+        changePossession(gameState, 0, true)
+        return {
+          type: 'sack',
+          yards: -sackYards,
+          fumble: true,
+          turnover: true,
+          description: `SACK for ${sackYards} yard loss, FUMBLE! Recovered by defense`
+        }
+      } else {
+        // Offense recovers fumble
+        logger.info(`Sack with fumble, ${gameState.possession} recovers`)
+        updateDownAndDistance(gameState, -sackYards)
+        return {
+          type: 'sack',
+          yards: -sackYards,
+          fumble: true,
+          turnover: false,
+          description: `SACK for ${sackYards} yard loss, fumble recovered by offense`
+        }
+      }
+    }
+
+    // Regular sack, no fumble
+    logger.debug(`  Sack for ${sackYards} yard loss`)
+    updateDownAndDistance(gameState, -sackYards)
+    return {
+      type: 'sack',
+      yards: -sackYards,
+      description: `SACK! Loss of ${sackYards} yards`
+    }
+  }
+
+  // Generate air yards for this pass attempt
+  const airYards = generateAirYards(passType)
+
+  // Check for interception (checked before completion)
   if (Math.random() < GAME_CONSTANTS.PASS_INTERCEPTION[passType]) {
-    stats.interceptionsLost++
+    stats.passInterceptions++
     const racResult = runAfterCatch()
     const returnYards = racResult.yards
     // Defense gets the return yards
     const defenseStats = getStats(gameState, gameState.possession === 'home' ? 'away' : 'home')
     defenseStats.interceptionReturnYards += returnYards
-    logger.info(`🚫 INTERCEPTION! ${gameState.possession} pass picked off, returned ${returnYards} yards`)
+    logger.info(`INTERCEPTION! ${gameState.possession} pass picked off at ${airYards} air yards, returned ${returnYards} yards`)
+
+    // Change possession at the interception spot
+    gameState.yardline += airYards  // Move to where INT happened
+    changePossession(gameState, 0, true)
 
     return {
       type: 'pass',
       yards: 0,
+      airYards: airYards,
       interception: true,
       turnover: true,
       returnYards: returnYards,
-      description: `Pass intercepted! Returned ${returnYards} yards`
+      description: `${passType.charAt(0).toUpperCase() + passType.slice(1)} pass intercepted! Returned ${returnYards} yards`
     }
   }
 
   // Check for completion
   if (Math.random() < GAME_CONSTANTS.PASS_COMPLETION[passType]) {
-    // Completed pass
-    const [minAir, maxAir] = GAME_CONSTANTS.AIR_YARDS[passType]
-    const airYards = Math.floor(Math.random() * (maxAir - minAir + 1)) + minAir
+    // Completed pass - add run after catch
     const racResult = runAfterCatch()
     const racYards = racResult.yards
     const totalYards = airYards + racYards
 
+    stats.passCompletions++
     stats.passYards += totalYards
+    stats.passRacYards += racYards
 
     // Check for fumble after catch (2% for now, will use RAC fumble rate later)
     if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_PASS) {
+      stats.recFumbles++
       if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
         // Defense recovers - turnover at the spot of the fumble
-        stats.fumblesLost++
+        stats.recFumblesLost++
         gameState.yardline += totalYards  // Move to fumble spot
-        logger.info(`💨 FUMBLE! ${gameState.possession} loses the ball at ${gameState.yardline}`)
+        logger.info(`FUMBLE! ${gameState.possession} loses the ball at ${gameState.yardline}`)
         changePossession(gameState, 0, true)  // Maintain field position
         return {
           type: 'pass',
@@ -384,11 +533,27 @@ function executePass(gameState) {
       }
     }
 
+    // Check for passing touchdown before updating
+    const isTouchdown = gameState.yardline + totalYards >= 100
+    if (isTouchdown) {
+      stats.passTouchdowns++
+    }
+
     updateDownAndDistance(gameState, totalYards)
+
+    // Build RAC steps for animation (starting from airYards + 1)
+    const racSteps = []
+    for (let i = 1; i <= racYards; i++) {
+      racSteps.push(airYards + i)
+    }
 
     return {
       type: 'pass',
+      passType: passType,
       yards: totalYards,
+      airYards: airYards,
+      racYards: racYards,
+      racSteps: racSteps,
       complete: true,
       description: `Pass complete for ${totalYards} yards (${airYards} air, ${racYards} RAC)`
     }
@@ -399,8 +564,9 @@ function executePass(gameState) {
     return {
       type: 'pass',
       yards: 0,
+      airYards: airYards,
       complete: false,
-      description: 'Pass incomplete'
+      description: `${passType.charAt(0).toUpperCase() + passType.slice(1)} pass incomplete`
     }
   }
 }
