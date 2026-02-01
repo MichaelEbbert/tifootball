@@ -39,8 +39,12 @@ async function loadTeamsFromDatabase() {
   const SQL = await initSqlJs()
   const db = new SQL.Database(readFileSync(dbPath))
 
-  // Load all teams with division/conference
-  const teamsResult = db.exec('SELECT id, name, city, abbreviation, division, conference FROM teams')
+  // Load all teams with division/conference and coach's red zone aggression
+  const teamsResult = db.exec(`
+    SELECT t.id, t.name, t.city, t.abbreviation, t.division, t.conference, c.red_zone_aggression
+    FROM teams t
+    LEFT JOIN coaches c ON t.id = c.team_id
+  `)
   if (!teamsResult[0]) return null
 
   const teams = teamsResult[0].values.map(row => ({
@@ -50,6 +54,7 @@ async function loadTeamsFromDatabase() {
     abbreviation: row[3],
     division: row[4],
     conference: row[5],
+    redZoneAggression: row[6] || 0,  // -10 to +10, default 0
     tendencies: {}
   }))
 

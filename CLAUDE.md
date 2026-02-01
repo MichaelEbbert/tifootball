@@ -426,7 +426,6 @@ This gives slightly above-NFL average, making for exciting games while staying r
 
 1. Penalties (false start, holding, pass interference, etc.)
 2. Coach AI using fourth down tendency tables
-3. Coach AI using red zone tendency tables
 
 ## Mechanics Completed
 
@@ -438,6 +437,8 @@ This gives slightly above-NFL average, making for exciting games while staying r
 - ✅ Interception return touchdowns (pick-sixes)
 - ✅ Coach AI using play tendency tables (run/short/medium/long per situation)
 - ✅ Overtime (15 min, each team possesses once unless defensive TD, tie if clock expires)
+- ✅ Red zone pass restrictions (no long inside 30, no medium inside 15)
+- ✅ Red zone aggression per coach (-10 to +10, positive = more passes)
 
 ## Coach Tendency System
 

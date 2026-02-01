@@ -457,7 +457,7 @@ function determinePlayType(gameState) {
 
   // 1st-3rd down: use coach tendencies
   const situation = getSituationKey(down, distance)
-  const tendencies = getCoachTendencies(gameState, situation)
+  let tendencies = getCoachTendencies(gameState, situation)
 
   // Safety check: avoid long passes deep in own territory
   if (yardline <= 15 && Math.random() < 0.7) {
@@ -465,7 +465,82 @@ function determinePlayType(gameState) {
     return 'run'
   }
 
-  return pickPlayFromTendencies(tendencies)
+  // Calculate yards to goal for pass restrictions
+  const yardsToGoal = 100 - yardline
+
+  // Red zone adjustments (inside opponent's 20)
+  if (yardsToGoal <= 20) {
+    tendencies = applyRedZoneAggression(gameState, tendencies)
+  }
+
+  // Pick play with field position restrictions
+  return pickPlayWithRestrictions(tendencies, yardsToGoal)
+}
+
+/**
+ * Apply red zone aggression offset to tendencies
+ * Positive aggression = more passes, negative = more runs
+ */
+function applyRedZoneAggression(gameState, tendencies) {
+  const team = gameState.possession === 'home' ? gameState.homeTeam : gameState.awayTeam
+  const aggression = team.redZoneAggression || 0
+
+  if (aggression === 0) return tendencies
+
+  // Clone tendencies to avoid mutating original
+  const adjusted = { ...tendencies }
+
+  // Positive aggression: shift from run to passes
+  // Negative aggression: shift from passes to run
+  adjusted.run = Math.max(0, Math.min(100, tendencies.run - aggression))
+
+  // Distribute the shifted percentage to passes proportionally
+  const passTotal = tendencies.short + tendencies.medium + (tendencies.long || 0)
+  if (passTotal > 0) {
+    const ratio = aggression / passTotal
+    adjusted.short = Math.max(0, tendencies.short + tendencies.short * ratio)
+    adjusted.medium = Math.max(0, tendencies.medium + tendencies.medium * ratio)
+    if (tendencies.long) {
+      adjusted.long = Math.max(0, tendencies.long + tendencies.long * ratio)
+    }
+  }
+
+  return adjusted
+}
+
+/**
+ * Pick a play from tendencies with field position restrictions
+ * - No long passes inside the 30
+ * - No medium passes inside the 15
+ */
+function pickPlayWithRestrictions(tendencies, yardsToGoal) {
+  // Build allowed plays based on field position
+  let allowedPlays = ['run', 'short', 'medium', 'long']
+
+  // No long passes inside the 30
+  if (yardsToGoal <= 30) {
+    allowedPlays = allowedPlays.filter(p => p !== 'long')
+  }
+
+  // No medium passes inside the 15
+  if (yardsToGoal <= 15) {
+    allowedPlays = allowedPlays.filter(p => p !== 'medium')
+  }
+
+  // Re-roll until we get an allowed play
+  let play
+  let attempts = 0
+  do {
+    play = pickPlayFromTendencies(tendencies)
+    attempts++
+  } while (!allowedPlays.includes(play) && attempts < 100)
+
+  // Fallback to run if somehow stuck
+  if (!allowedPlays.includes(play)) {
+    return 'run'
+  }
+
+  return play
 }
 
 /**

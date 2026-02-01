@@ -76,42 +76,6 @@ function generatePlayTendencies(situation) {
 }
 
 /**
- * Red zone ranges (no long pass - compressed field)
- */
-const RED_ZONE_RANGES = {
-  '1st_10':     { run: [40, 60], short: [25, 40], medium: [15, 30] },   // Base, lean run
-  '2nd_short':  { run: [50, 70], short: [18, 32], medium: [10, 22] },   // Run heavy
-  '2nd_medium': { run: [35, 55], short: [28, 42], medium: [18, 32] },   // Balanced
-  '2nd_long':   { run: [30, 50], short: [30, 45], medium: [20, 35] },   // Pass lean
-  '3rd_short':  { run: [55, 75], short: [15, 28], medium: [8, 18] },    // Very run heavy
-  '3rd_medium': { run: [35, 55], short: [28, 42], medium: [18, 32] },   // Balanced
-  '3rd_long':   { run: [30, 50], short: [30, 45], medium: [20, 35] },   // Pass lean
-  '4th_short':  { run: [55, 75], short: [15, 28], medium: [8, 18] },    // Very run heavy
-  '4th_medium': { run: [35, 55], short: [28, 42], medium: [18, 32] },   // Balanced
-  '4th_long':   { run: [30, 50], short: [30, 45], medium: [20, 35] }    // Pass lean
-}
-
-/**
- * Generate red zone tendencies (no long pass - compressed field)
- */
-function generateRedZoneTendencies(situation) {
-  const ranges = RED_ZONE_RANGES[situation] || RED_ZONE_RANGES['1st_10']
-
-  // Generate random values within each range
-  const run = ranges.run[0] + Math.random() * (ranges.run[1] - ranges.run[0])
-  const short = ranges.short[0] + Math.random() * (ranges.short[1] - ranges.short[0])
-  const medium = ranges.medium[0] + Math.random() * (ranges.medium[1] - ranges.medium[0])
-
-  // Normalize to 100%
-  const total = run + short + medium
-  return {
-    run_pct: Math.round((run / total) * 100),
-    short_pct: Math.round((short / total) * 100),
-    medium_pct: Math.round((medium / total) * 100)
-  }
-}
-
-/**
  * Generate 4th down go/punt/fg tendencies
  */
 function generateFourthDownTendencies(quarter, scoreDiff) {
@@ -168,6 +132,7 @@ async function seed() {
       team_id INTEGER NOT NULL,
       last_name TEXT NOT NULL,
       first_name TEXT,
+      red_zone_aggression INTEGER DEFAULT 0,
       hired_date DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (team_id) REFERENCES teams(id)
     )
@@ -230,18 +195,6 @@ async function seed() {
     )
   `)
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS coach_red_zone_tendencies (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      coach_id INTEGER NOT NULL,
-      situation TEXT NOT NULL,
-      run_pct INTEGER NOT NULL,
-      short_pct INTEGER NOT NULL,
-      medium_pct INTEGER NOT NULL,
-      FOREIGN KEY (coach_id) REFERENCES coaches(id),
-      UNIQUE(coach_id, situation)
-    )
-  `)
 
   console.log('Tables created\n')
 
@@ -269,9 +222,11 @@ async function seed() {
     // Assign a random coach to each team
     const coachFirstName = getRandomFirstName()
     const coachLastName = getRandomSurname()
+    // Red zone aggression: -10 (conservative/run heavy) to +10 (aggressive/pass heavy)
+    const redZoneAggression = Math.floor(Math.random() * 21) - 10
     db.run(
-      'INSERT INTO coaches (team_id, first_name, last_name) VALUES (?, ?, ?)',
-      [team.id, coachFirstName, coachLastName]
+      'INSERT INTO coaches (team_id, first_name, last_name, red_zone_aggression) VALUES (?, ?, ?, ?)',
+      [team.id, coachFirstName, coachLastName, redZoneAggression]
     )
     const coachId = team.id  // Coach ID matches team ID since we insert in order
     coachCount++
@@ -282,15 +237,6 @@ async function seed() {
       db.run(
         'INSERT INTO coach_play_tendencies (coach_id, situation, run_pct, short_pct, medium_pct, long_pct) VALUES (?, ?, ?, ?, ?, ?)',
         [coachId, situation, t.run_pct, t.short_pct, t.medium_pct, t.long_pct]
-      )
-    })
-
-    // Generate red zone tendencies (independent of normal tendencies)
-    situations.forEach(situation => {
-      const t = generateRedZoneTendencies(situation)
-      db.run(
-        'INSERT INTO coach_red_zone_tendencies (coach_id, situation, run_pct, short_pct, medium_pct) VALUES (?, ?, ?, ?, ?)',
-        [coachId, situation, t.run_pct, t.short_pct, t.medium_pct]
       )
     })
 
