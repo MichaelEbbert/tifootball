@@ -14,6 +14,8 @@
 
 import { fileURLToPath, pathToFileURL } from 'url'
 import { dirname, join } from 'path'
+import { readFileSync, existsSync } from 'fs'
+import initSqlJs from 'sql.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -24,6 +26,69 @@ const gameSimPath = pathToFileURL(join(__dirname, '..', 'client', 'src', 'utils'
 
 const { initializeGame, executePlay, isGameOver } = await import(gameEnginePath)
 const { runningPlay } = await import(gameSimPath)
+
+// Load teams and coach tendencies from database
+async function loadTeamsFromDatabase() {
+  const dbPath = join(__dirname, 'db', 'tifootball.db')
+
+  if (!existsSync(dbPath)) {
+    console.log('Database not found, using mock teams')
+    return null
+  }
+
+  const SQL = await initSqlJs()
+  const db = new SQL.Database(readFileSync(dbPath))
+
+  // Load all teams with division/conference
+  const teamsResult = db.exec('SELECT id, name, city, abbreviation, division, conference FROM teams')
+  if (!teamsResult[0]) return null
+
+  const teams = teamsResult[0].values.map(row => ({
+    id: row[0],
+    name: row[1],
+    city: row[2],
+    abbreviation: row[3],
+    division: row[4],
+    conference: row[5],
+    tendencies: {}
+  }))
+
+  // Load tendencies for each team's coach
+  const tendenciesResult = db.exec(`
+    SELECT c.team_id, t.situation, t.run_pct, t.short_pct, t.medium_pct, t.long_pct
+    FROM coach_play_tendencies t
+    JOIN coaches c ON t.coach_id = c.id
+  `)
+
+  if (tendenciesResult[0]) {
+    tendenciesResult[0].values.forEach(row => {
+      const teamId = row[0]
+      const situation = row[1]
+      const team = teams.find(t => t.id === teamId)
+      if (team) {
+        team.tendencies[situation] = {
+          run: row[2],
+          short: row[3],
+          medium: row[4],
+          long: row[5]
+        }
+      }
+    })
+  }
+
+  db.close()
+  return teams
+}
+
+// Pick two random different teams
+function pickRandomMatchup(teams) {
+  const homeIdx = Math.floor(Math.random() * teams.length)
+  let awayIdx = Math.floor(Math.random() * teams.length)
+  while (awayIdx === homeIdx) {
+    awayIdx = Math.floor(Math.random() * teams.length)
+  }
+  return { homeTeam: teams[homeIdx], awayTeam: teams[awayIdx] }
+}
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -45,7 +110,12 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--full') {
     fullMode = true
   }
+  if (args[i] === '--round-robin') {
+    // Round-robin mode handled after DB load
+  }
 }
+
+const roundRobinMode = args.includes('--round-robin')
 
 // 4th down conversion probability test
 if (fourthDownTest) {
@@ -84,19 +154,196 @@ if (fourthDownTest) {
   process.exit(0)
 }
 
-// Mock team data
-const homeTeam = {
+// Load teams from database (or use mock if not available)
+const dbTeams = await loadTeamsFromDatabase()
+
+// Fallback mock teams if database not available
+const mockHomeTeam = {
   id: 1,
   city: 'Home',
   name: 'Team',
   abbreviation: 'HME'
 }
 
-const awayTeam = {
+const mockAwayTeam = {
   id: 2,
   city: 'Away',
   name: 'Team',
   abbreviation: 'AWY'
+}
+
+const useDbTeams = dbTeams && dbTeams.length >= 2
+
+// Round-robin tournament mode
+if (roundRobinMode) {
+  if (!useDbTeams) {
+    console.log('Round-robin mode requires database with teams. Run seed.js first.')
+    process.exit(1)
+  }
+
+  // Check for --games-per-team flag (default: full round-robin = 31 games each)
+  let gamesPerTeam = 31
+  const gamesPerTeamIdx = args.indexOf('--games-per-team')
+  if (gamesPerTeamIdx !== -1 && args[gamesPerTeamIdx + 1]) {
+    gamesPerTeam = parseInt(args[gamesPerTeamIdx + 1], 10)
+  }
+
+  const isPartialSeason = gamesPerTeam < 31
+
+  console.log(`\n🏈 ${isPartialSeason ? gamesPerTeam + '-Game Season' : 'Round-Robin Tournament'}`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+  console.log(`${dbTeams.length} teams, ${gamesPerTeam} games each\n`)
+
+  // Initialize team records
+  const records = {}
+  dbTeams.forEach(team => {
+    records[team.id] = {
+      team: team,
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+      gamesPlayed: 0
+    }
+  })
+
+  const startTime = Date.now()
+  let gamesPlayed = 0
+
+  // Play games until all teams have enough games
+  // Use greedy random pairing: find teams needing games, pair randomly
+  while (true) {
+    // Get teams that still need games, sorted by fewest games played
+    const teamsNeedingGames = dbTeams
+      .filter(t => records[t.id].gamesPlayed < gamesPerTeam)
+      .sort((a, b) => records[a.id].gamesPlayed - records[b.id].gamesPlayed)
+
+    if (teamsNeedingGames.length < 2) break
+
+    // Pick the team with fewest games
+    const team1 = teamsNeedingGames[0]
+
+    // Find valid opponents (also need games, haven't played each other too much)
+    const validOpponents = teamsNeedingGames
+      .slice(1)
+      .filter(t => records[t.id].gamesPlayed < gamesPerTeam)
+
+    if (validOpponents.length === 0) break
+
+    // Pick random opponent from valid ones
+    const team2 = validOpponents[Math.floor(Math.random() * validOpponents.length)]
+
+    // Randomly assign home/away
+    const homeTeam = Math.random() < 0.5 ? team1 : team2
+    const awayTeam = homeTeam === team1 ? team2 : team1
+
+    const gameState = initializeGame(homeTeam, awayTeam, false, false)
+
+    while (!isGameOver(gameState)) {
+      executePlay(gameState)
+    }
+
+    // Update records
+    const homeRecord = records[homeTeam.id]
+    const awayRecord = records[awayTeam.id]
+
+    homeRecord.gamesPlayed++
+    awayRecord.gamesPlayed++
+    homeRecord.pointsFor += gameState.score.home
+    homeRecord.pointsAgainst += gameState.score.away
+    awayRecord.pointsFor += gameState.score.away
+    awayRecord.pointsAgainst += gameState.score.home
+
+    if (gameState.score.home > gameState.score.away) {
+      homeRecord.wins++
+      awayRecord.losses++
+    } else if (gameState.score.away > gameState.score.home) {
+      awayRecord.wins++
+      homeRecord.losses++
+    } else {
+      homeRecord.ties++
+      awayRecord.ties++
+    }
+
+    gamesPlayed++
+    if (gamesPlayed % 50 === 0) {
+      process.stdout.write(`\r  Played ${gamesPlayed} games...`)
+    }
+  }
+
+  const endTime = Date.now()
+  const duration = (endTime - startTime) / 1000
+
+  console.log(`\r  Played ${gamesPlayed} games                    `)
+
+  // Group teams by conference and division
+  const conferences = { AFC: {}, NFC: {} }
+  Object.values(records).forEach(record => {
+    const conf = record.team.conference
+    const div = record.team.division
+    if (!conferences[conf]) conferences[conf] = {}
+    if (!conferences[conf][div]) conferences[conf][div] = []
+    conferences[conf][div].push(record)
+  })
+
+  // Sort each division by wins, ties, then point differential
+  const sortTeams = (a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins
+    if (b.ties !== a.ties) return b.ties - a.ties
+    return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst)
+  }
+
+  // Print division standings
+  const divisionOrder = ['East', 'North', 'South', 'West']
+
+  for (const conf of ['AFC', 'NFC']) {
+    console.log(`\n${'═'.repeat(70)}`)
+    console.log(`  ${conf}`)
+    console.log(`${'═'.repeat(70)}`)
+
+    for (const div of divisionOrder) {
+      const teams = conferences[conf][div]
+      if (!teams) continue
+
+      teams.sort(sortTeams)
+
+      console.log(`\n  ${conf} ${div}`)
+      console.log(`  ${'─'.repeat(66)}`)
+      console.log(`     Team                    W    L    T    PPG    OPP   Diff`)
+      console.log(`  ${'─'.repeat(66)}`)
+
+      teams.forEach((record, idx) => {
+        const rank = idx + 1
+        const name = (record.team.city + ' ' + record.team.name).padEnd(23)
+        const wins = String(record.wins).padStart(2)
+        const losses = String(record.losses).padStart(2)
+        const ties = String(record.ties).padStart(2)
+        const ppg = (record.pointsFor / record.gamesPlayed).toFixed(1).padStart(6)
+        const opp = (record.pointsAgainst / record.gamesPlayed).toFixed(1).padStart(6)
+        const diff = record.pointsFor - record.pointsAgainst
+        const diffStr = (diff >= 0 ? '+' : '') + diff
+
+        console.log(`  ${rank}.  ${name} ${wins}   ${losses}   ${ties}  ${ppg}  ${opp}  ${diffStr.padStart(5)}`)
+      })
+    }
+  }
+
+  // League summary
+  const allRecords = Object.values(records)
+  const totalPF = allRecords.reduce((sum, r) => sum + r.pointsFor, 0)
+  const totalGames = allRecords.reduce((sum, r) => sum + r.gamesPlayed, 0) / 2
+  const avgPPG = totalPF / totalGames / 2
+
+  console.log(`\n${'═'.repeat(70)}`)
+  console.log(`  League Summary`)
+  console.log(`${'═'.repeat(70)}`)
+  console.log(`  Total games: ${gamesPlayed}`)
+  console.log(`  Avg points/team/game: ${avgPPG.toFixed(1)}`)
+  console.log(`  Completed in ${duration.toFixed(2)} seconds`)
+  console.log(``)
+
+  process.exit(0)
 }
 
 // Statistics collectors
@@ -126,6 +373,8 @@ const stats = {
   totalIntReturnTDs: 0,
   totalFumbles: 0,
   totalSafeties: 0,
+  totalFgAttempts: 0,
+  totalFgMade: 0,
   homeWins: 0,
   awayWins: 0,
   ties: 0,
@@ -137,7 +386,7 @@ const stats = {
 
 console.log(`\n🏈 Silent Simulator`)
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-const modeFlags = [rotationMode && 'rotation', fullMode && 'full'].filter(Boolean).join(', ')
+const modeFlags = [rotationMode && 'rotation', fullMode && 'full', useDbTeams && '32 teams'].filter(Boolean).join(', ')
 console.log(`Running ${numGames} games...${modeFlags ? ` (${modeFlags})` : ''}\n`)
 
 const startTime = Date.now()
@@ -145,6 +394,18 @@ const startTime = Date.now()
 // Run simulations
 for (let game = 0; game < numGames; game++) {
   const simplifiedMode = !fullMode
+
+  // Pick teams - use DB teams with tendencies or mock teams
+  let homeTeam, awayTeam
+  if (useDbTeams) {
+    const matchup = pickRandomMatchup(dbTeams)
+    homeTeam = matchup.homeTeam
+    awayTeam = matchup.awayTeam
+  } else {
+    homeTeam = mockHomeTeam
+    awayTeam = mockAwayTeam
+  }
+
   const gameState = initializeGame(homeTeam, awayTeam, simplifiedMode, rotationMode)
 
   // Run until game is over
@@ -193,6 +454,10 @@ for (let game = 0; game < numGames; game++) {
   // Track return yardage
   stats.totalPuntReturnYards += gameState.homeStats.puntReturnYards + gameState.awayStats.puntReturnYards
   stats.totalIntReturnYards += gameState.homeStats.interceptionReturnYards + gameState.awayStats.interceptionReturnYards
+
+  // Track field goals
+  stats.totalFgAttempts += (gameState.homeStats.fgAttempted || 0) + (gameState.awayStats.fgAttempted || 0)
+  stats.totalFgMade += (gameState.homeStats.fgMade || 0) + (gameState.awayStats.fgMade || 0)
 
   // Win/loss tracking
   if (gameState.score.home > gameState.score.away) {
@@ -286,6 +551,14 @@ if (stats.totalTwoPtAttempts > 0) {
   console.log(`\n🎯 2-Point Conversions:`)
   console.log(`  Attempts:                   ${stats.totalTwoPtAttempts} (${(stats.totalTwoPtAttempts / stats.totalGames).toFixed(2)}/game)`)
   console.log(`  Success rate:               ${twoPtRate}% (${stats.totalTwoPtMade}/${stats.totalTwoPtAttempts})`)
+}
+
+if (stats.totalFgAttempts > 0) {
+  const fgRate = (stats.totalFgMade / stats.totalFgAttempts * 100).toFixed(1)
+  console.log(`\n🎯 Field Goals:`)
+  console.log(`  Attempts:                   ${stats.totalFgAttempts} (${(stats.totalFgAttempts / stats.totalGames).toFixed(2)}/game)`)
+  console.log(`  Success rate:               ${fgRate}% (${stats.totalFgMade}/${stats.totalFgAttempts})`)
+  console.log(`  Points from FGs:            ${stats.totalFgMade * 3} (${(stats.totalFgMade * 3 / stats.totalGames).toFixed(1)}/game)`)
 }
 
 console.log(`\n📈 Game Flow:`)

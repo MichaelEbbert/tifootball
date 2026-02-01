@@ -42,7 +42,17 @@ const GAME_CONSTANTS = {
   FAIR_CATCH_PCT: 0.40,
 
   // Field Goals
-  FG_SUCCESS: { '0-29': 0.95, '30-39': 0.85, '40-49': 0.70, '50+': 0.50 },
+  // Distance = yards to goal line + 7 (snap)
+  // From opp 45: 45+7=52 yds | From opp 30: 30+7=37 yds | From own 45: 55+7=62 yds (max)
+  MAX_FG_DISTANCE: 62,
+  FG_SUCCESS: {
+    '0-26': 0.98,   // Inside opp 20 (chip shots)
+    '27-36': 0.93,  // Opp 20-30 (high percentage)
+    '37-46': 0.85,  // Opp 30-40 (solid range)
+    '47-52': 0.72,  // Opp 40-46 (long but makeable)
+    '53-57': 0.55,  // Opp 46-51 (difficult)
+    '58-62': 0.35   // Own 45-49 (max range, low percentage)
+  },
 
   // Kickoffs
   TOUCHBACK_PCT: 0.60,
@@ -420,12 +430,12 @@ function determinePlayType(gameState) {
 
   // 4th down special logic (punt/FG decisions)
   if (down === 4) {
-    // Field goal range (inside opponent 45)
-    if (yardline >= 55) {
+    const fgDecision = shouldAttemptFieldGoal(gameState)
+    if (fgDecision === 'fieldgoal') {
       return 'fieldgoal'
     }
-    // Go for it if short yardage and good field position
-    if (distance <= 2 && yardline >= 40) {
+    if (fgDecision === 'go') {
+      // Go for it - use coach tendencies
       const situation = getSituationKey(down, distance)
       const tendencies = getCoachTendencies(gameState, situation)
       return pickPlayFromTendencies(tendencies)
@@ -971,21 +981,105 @@ function executePunt(gameState) {
 }
 
 /**
+ * Determine if team should attempt a field goal on 4th down
+ * Returns: 'fieldgoal', 'go', or 'punt'
+ */
+function shouldAttemptFieldGoal(gameState) {
+  const { yardline, distance, quarter } = gameState
+  const yardsToGoal = 100 - yardline
+  const fgDistance = yardsToGoal + 7  // snap distance only
+
+  // Max FG range: 62 yards (from own 45 or closer)
+  if (fgDistance > GAME_CONSTANTS.MAX_FG_DISTANCE) {
+    // Out of FG range - punt or go for it
+    if (distance <= 2 && yardline >= 40) {
+      return 'go'  // Short yardage, decent field position
+    }
+    return 'punt'
+  }
+
+  // Calculate score differential (positive = winning)
+  const ourScore = gameState.score[gameState.possession]
+  const theirScore = gameState.score[gameState.possession === 'home' ? 'away' : 'home']
+  const scoreDiff = ourScore - theirScore
+
+  // Q4 decision tree based on score
+  if (quarter === 4) {
+    // Down by more than 7: need TDs, skip long FGs
+    if (scoreDiff < -7) {
+      if (fgDistance > 45) return 'go'  // Go for TD on long kicks
+      if (distance <= 3) return 'go'    // Go for it on short yardage
+      return 'fieldgoal'                 // Take chip shots
+    }
+    // Down by 4-7: FG doesn't help much, but take short ones
+    if (scoreDiff >= -7 && scoreDiff < -3) {
+      if (fgDistance > 50) return 'go'
+      return 'fieldgoal'
+    }
+    // Down by 1-3: FG ties or takes lead
+    if (scoreDiff >= -3 && scoreDiff < 0) {
+      return 'fieldgoal'  // Always take the FG
+    }
+    // Tied: take the lead
+    if (scoreDiff === 0) {
+      return 'fieldgoal'
+    }
+    // Up by 1-3: extend lead
+    if (scoreDiff > 0 && scoreDiff <= 3) {
+      return 'fieldgoal'
+    }
+    // Up by 4-7: FG makes it 2-score game
+    if (scoreDiff > 3 && scoreDiff <= 7) {
+      return 'fieldgoal'
+    }
+    // Up by 8+: be conservative, take the points
+    if (scoreDiff > 7) {
+      return 'fieldgoal'
+    }
+  }
+
+  // Q1-Q3: Risk/reward based on distance
+  // Early game: more conservative on long FGs
+  if (quarter <= 2) {
+    // First half: only attempt FGs under 50 yards unless close game
+    if (fgDistance > 50 && Math.abs(scoreDiff) <= 7) {
+      if (distance <= 3) return 'go'  // Short yardage, go for it
+      return 'punt'                    // Long FG early, punt instead
+    }
+    if (fgDistance > 55) {
+      return 'punt'  // Very long FGs early - punt
+    }
+  }
+
+  // Q3: Slightly more aggressive
+  if (quarter === 3) {
+    if (fgDistance > 55 && scoreDiff > 7) {
+      return 'punt'  // Up big in Q3, don't risk long FG
+    }
+  }
+
+  // Default: attempt the FG if in range
+  return 'fieldgoal'
+}
+
+/**
  * Execute field goal attempt
  */
 function executeFieldGoal(gameState) {
   const stats = getStats(gameState, gameState.possession)
   stats.fgAttempted++
 
-  // Distance = yards to goal + 10 (end zone) + 7 (snap distance)
-  const fgDistance = (100 - gameState.yardline) + 17
+  // Distance = yards to goal + 7 (snap distance)
+  const fgDistance = (100 - gameState.yardline) + 7
 
-  // Determine success rate
+  // Determine success rate by distance bracket
   let successRate
-  if (fgDistance < 30) successRate = GAME_CONSTANTS.FG_SUCCESS['0-29']
-  else if (fgDistance < 40) successRate = GAME_CONSTANTS.FG_SUCCESS['30-39']
-  else if (fgDistance < 50) successRate = GAME_CONSTANTS.FG_SUCCESS['40-49']
-  else successRate = GAME_CONSTANTS.FG_SUCCESS['50+']
+  if (fgDistance <= 26) successRate = GAME_CONSTANTS.FG_SUCCESS['0-26']
+  else if (fgDistance <= 36) successRate = GAME_CONSTANTS.FG_SUCCESS['27-36']
+  else if (fgDistance <= 46) successRate = GAME_CONSTANTS.FG_SUCCESS['37-46']
+  else if (fgDistance <= 52) successRate = GAME_CONSTANTS.FG_SUCCESS['47-52']
+  else if (fgDistance <= 57) successRate = GAME_CONSTANTS.FG_SUCCESS['53-57']
+  else successRate = GAME_CONSTANTS.FG_SUCCESS['58-62']
 
   if (Math.random() < successRate) {
     stats.fgMade++
@@ -1013,13 +1107,17 @@ function executeFieldGoal(gameState) {
       description: `${fgDistance}-yard field goal GOOD!`
     }
   } else {
-    changePossession(gameState, 0) // Defense gets ball at spot
+    // Missed FG: defense gets ball at spot of kick (7 yards behind LOS)
+    const spotOfKick = gameState.yardline - 7
+    changePossession(gameState, -7)
+    const newYardline = 100 - spotOfKick
+    logger.info(`Field goal MISSED from ${fgDistance} yards. ${gameState.possession === 'home' ? gameState.homeTeam.name : gameState.awayTeam.name} takes over at their ${newYardline}`)
 
     return {
       type: 'fieldgoal',
       distance: fgDistance,
       made: false,
-      description: `${fgDistance}-yard field goal MISSED`
+      description: `${fgDistance}-yard field goal MISSED. Ball at spot of kick.`
     }
   }
 }
