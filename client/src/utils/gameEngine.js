@@ -467,11 +467,16 @@ function executeRun(gameState) {
     description: yards >= 0 ? `Tackled for a gain of ${yards} yards` : `Tackled for a loss of ${Math.abs(yards)} yards`
   }
 
-  // Add XP result and scoring log if touchdown
+  // Add conversion result and scoring log if touchdown
   if (isTouchdown && gameState.lastXpResult !== undefined) {
     result.xpGood = gameState.lastXpResult
-    addScoringEntry(gameState, 'TD', 'run', yards, gameState.lastXpResult ? 'good' : 'no_good', scoringTeam)
-    delete gameState.lastXpResult // Clean up
+    result.conversionType = gameState.lastConversionType || 'xp'
+    const extraPointValue = gameState.lastConversionType === '2pt'
+      ? (gameState.lastXpResult ? '2pt_good' : '2pt_no_good')
+      : (gameState.lastXpResult ? 'good' : 'no_good')
+    addScoringEntry(gameState, 'TD', 'run', yards, extraPointValue, scoringTeam)
+    delete gameState.lastXpResult
+    delete gameState.lastConversionType
   }
 
   return result
@@ -701,11 +706,16 @@ function executePass(gameState, forcedType = null) {
         : `Pass complete for ${totalYards} yards (${airYards} air, ${racYards} RAC)`
     }
 
-    // Add XP result and scoring log if touchdown
+    // Add conversion result and scoring log if touchdown
     if (isTouchdown && gameState.lastXpResult !== undefined) {
       result.xpGood = gameState.lastXpResult
-      addScoringEntry(gameState, 'TD', 'pass', totalYards, gameState.lastXpResult ? 'good' : 'no_good', scoringTeam)
+      result.conversionType = gameState.lastConversionType || 'xp'
+      const extraPointValue = gameState.lastConversionType === '2pt'
+        ? (gameState.lastXpResult ? '2pt_good' : '2pt_no_good')
+        : (gameState.lastXpResult ? 'good' : 'no_good')
+      addScoringEntry(gameState, 'TD', 'pass', totalYards, extraPointValue, scoringTeam)
       delete gameState.lastXpResult
+      delete gameState.lastConversionType
     }
 
     return result
@@ -909,9 +919,16 @@ function updateDownAndDistance(gameState, yards) {
     gameState.score[gameState.possession] += 6
     logger.info(`🏈 TOUCHDOWN! ${gameState.possession} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
-    // Attempt extra point (both modes now)
-    const xpGood = attemptExtraPoint(gameState)
-    gameState.lastXpResult = xpGood // Store for play result
+    // Decide: 2-point conversion or extra point?
+    if (shouldGoForTwo(gameState)) {
+      const twoPtGood = attemptTwoPointConversion(gameState)
+      gameState.lastXpResult = twoPtGood
+      gameState.lastConversionType = '2pt'
+    } else {
+      const xpGood = attemptExtraPoint(gameState)
+      gameState.lastXpResult = xpGood
+      gameState.lastConversionType = 'xp'
+    }
 
     if (gameState.simplifiedMode) {
       // Simplified mode: no kickoff, other team starts at own 35
@@ -950,6 +967,61 @@ function updateDownAndDistance(gameState, yards) {
       // Turnover on downs - other team takes over at this spot
       changePossession(gameState, 0, true)
     }
+  }
+}
+
+/**
+ * Decide whether to attempt 2-point conversion based on game situation
+ * Analytics-based decision for Q4 (and late Q3)
+ * @returns {boolean} true if should go for 2
+ */
+function shouldGoForTwo(gameState) {
+  const scoringTeam = gameState.possession
+  const myScore = gameState.score[scoringTeam]
+  const oppScore = gameState.score[scoringTeam === 'home' ? 'away' : 'home']
+
+  // Point differential AFTER the TD (6 points already added)
+  const diff = myScore - oppScore
+
+  // Only consider 2PT in Q4, or late Q3 (under 5 min)
+  const isLateGame = gameState.quarter === 4 ||
+                     (gameState.quarter === 3 && gameState.clock < 300)
+
+  if (!isLateGame) {
+    return false
+  }
+
+  // Go for 2 in these situations (diff is after TD scored):
+  // Down 8: diff = -8 (go for 2 first, know what you need later)
+  // Down 5: diff = -5 (success = down 3, FG ties)
+  // Down 4: diff = -4 (down 2 helps more than down 4 hurts)
+  // Down 2: diff = -2 (go for tie/lead)
+  // Down 9: diff = -9 (success = 1-score game)
+  // Down 12: diff = -12 (need 2 TDs anyway, maximize info)
+  // Down 15: diff = -15 (success = down 13, need 2 TDs)
+  // Down 16: diff = -16 (need 2 TDs + 2PT anyway)
+
+  const goForTwoSituations = [-2, -4, -5, -8, -9, -12, -15, -16]
+
+  return goForTwoSituations.includes(diff)
+}
+
+/**
+ * Attempt 2-point conversion after touchdown
+ * @returns {boolean} true if 2PT was successful
+ */
+function attemptTwoPointConversion(gameState) {
+  const stats = getStats(gameState, gameState.possession)
+  stats.twoPtAttempted++
+
+  if (Math.random() < GAME_CONSTANTS.TWO_PT_SUCCESS) {
+    stats.twoPtMade++
+    gameState.score[gameState.possession] += 2
+    logger.info(`✓ 2-POINT CONVERSION GOOD! Score: ${gameState.score.home}-${gameState.score.away}`)
+    return true
+  } else {
+    logger.info(`✗ 2-point conversion FAILED! Score: ${gameState.score.home}-${gameState.score.away}`)
+    return false
   }
 }
 

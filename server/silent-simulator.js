@@ -109,6 +109,8 @@ const stats = {
   totalSacks: 0,
   totalKickReturns: 0,
   totalKickReturnYards: 0,
+  totalTwoPtAttempts: 0,
+  totalTwoPtMade: 0,
   totalFirstDowns: 0,
   totalTouchdowns: 0,
   totalFumbles: 0,
@@ -153,6 +155,8 @@ for (let game = 0; game < numGames; game++) {
   stats.totalSacks += gameState.homeStats.sacks + gameState.awayStats.sacks
   stats.totalKickReturns += gameState.homeStats.kickReturnAttempts + gameState.awayStats.kickReturnAttempts
   stats.totalKickReturnYards += gameState.homeStats.kickReturnYards + gameState.awayStats.kickReturnYards
+  stats.totalTwoPtAttempts += gameState.homeStats.twoPtAttempted + gameState.awayStats.twoPtAttempted
+  stats.totalTwoPtMade += gameState.homeStats.twoPtMade + gameState.awayStats.twoPtMade
   stats.totalFirstDowns += gameState.homeStats.firstDowns + gameState.awayStats.firstDowns
   const homeFumbles = gameState.homeStats.rushingFumblesLost + gameState.homeStats.recFumblesLost + gameState.homeStats.sackFumblesLost
   const awayFumbles = gameState.awayStats.rushingFumblesLost + gameState.awayStats.recFumblesLost + gameState.awayStats.sackFumblesLost
@@ -246,6 +250,13 @@ if (stats.totalKickReturns > 0) {
   console.log(`  Total returns:              ${stats.totalKickReturns}`)
   console.log(`  Avg yards/return:           ${avgKickReturnYards.toFixed(1)}`)
   console.log(`  Avg returns/game:           ${(stats.totalKickReturns / stats.totalGames).toFixed(2)}`)
+}
+
+if (stats.totalTwoPtAttempts > 0) {
+  const twoPtRate = (stats.totalTwoPtMade / stats.totalTwoPtAttempts * 100).toFixed(1)
+  console.log(`\n🎯 2-Point Conversions:`)
+  console.log(`  Attempts:                   ${stats.totalTwoPtAttempts} (${(stats.totalTwoPtAttempts / stats.totalGames).toFixed(2)}/game)`)
+  console.log(`  Success rate:               ${twoPtRate}% (${stats.totalTwoPtMade}/${stats.totalTwoPtAttempts})`)
 }
 
 console.log(`\n📈 Game Flow:`)
