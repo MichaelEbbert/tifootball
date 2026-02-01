@@ -425,8 +425,9 @@ This gives slightly above-NFL average, making for exciting games while staying r
 ## Mechanics to Implement
 
 1. Penalties (false start, holding, pass interference, etc.)
-2. Coach AI using fourth down tendency tables
-3. Coach AI using red zone tendency tables
+2. Overtime rules (eliminate ties)
+3. Coach AI using fourth down tendency tables
+4. Coach AI using red zone tendency tables
 
 ## Mechanics Completed
 
@@ -472,18 +473,36 @@ const team = {
 
 If tendencies are not provided, defaults from `GAME_CONSTANTS.DEFAULT_TENDENCIES` are used.
 
-## Mechanics to Table Long Term
+## Tabled for Later
 
-1. Kickoff out of bounds penalty
-2. Onside kicks
-3. Field goal blocks
-4. Missed FG return for TD
-5. Punt blocks (was in original 1979 game)
-6. Fumble return touchdowns
-7. Two-minute warning
-8. Timeouts
-9. Spike plays (stop clock)
-10. Kneel down plays (was in original 1979 game)
-11. Overtime rules
-12. Blitzing (higher sack rate, higher big play risk)
-13. Coverage schemes affecting pass completion rates
+### Core Mechanics
+- Blocked punts (was in original 1979 game)
+- Kneel downs (clock management, was in original 1979 game)
+- Two-minute warning
+- Timeouts
+- Spike plays (stop clock)
+
+### Season/League Features
+- Playoffs / Super Bowl bracket
+- Realistic NFL schedule (6 division games, weighted conference matchups)
+- Standings tiebreakers (head-to-head, division record, strength of schedule)
+- Save/load seasons to database
+- Historical records (franchise records, league records)
+
+### UI/Frontend
+- Live game display polish
+- Play-by-play feed with scrolling history
+- Box scores (full game stats breakdown)
+- Season mode in the browser (not just simulator)
+
+### Game Depth
+- Home field advantage
+- Weather effects (rain, snow, wind affecting passes/kicks)
+- Onside kicks
+- Field goal blocks
+- Missed FG return for TD
+- Punt blocks
+- Fumble return touchdowns
+- Kickoff out of bounds penalty
+- Blitzing (higher sack rate, higher big play risk)
+- Coverage schemes affecting pass completion rates
