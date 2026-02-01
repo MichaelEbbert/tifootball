@@ -425,7 +425,6 @@ This gives slightly above-NFL average, making for exciting games while staying r
 ## Mechanics to Implement
 
 1. Penalties (false start, holding, pass interference, etc.)
-2. Coach AI using fourth down tendency tables
 
 ## Mechanics Completed
 
@@ -439,6 +438,7 @@ This gives slightly above-NFL average, making for exciting games while staying r
 - ✅ Overtime (15 min, each team possesses once unless defensive TD, tie if clock expires)
 - ✅ Red zone pass restrictions (no long inside 30, no medium inside 15)
 - ✅ Red zone aggression per coach (-10 to +10, positive = more passes)
+- ✅ Q4 4th down decisions based on clock and score (desperation mode, clock killing, late game adjustments)
 
 ## Coach Tendency System
 
