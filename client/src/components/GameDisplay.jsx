@@ -72,6 +72,53 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     logger.info('Viewing game summary')
   }
 
+  // Convert gameState stats to database format
+  function statsToDbFormat(teamStats, teamId) {
+    return {
+      team_id: teamId,
+      rushing_attempts: teamStats.rushingAttempts || 0,
+      rushing_yards: teamStats.rushingYards || 0,
+      rushing_touchdowns: teamStats.rushingTouchdowns || 0,
+      rushing_fumbles: teamStats.rushingFumbles || 0,
+      rushing_fumbles_lost: teamStats.rushingFumblesLost || 0,
+      pass_attempts: teamStats.passAttempts || 0,
+      pass_completions: teamStats.passCompletions || 0,
+      pass_yards: teamStats.passYards || 0,
+      pass_rac_yards: teamStats.passRacYards || 0,
+      pass_touchdowns: teamStats.passTouchdowns || 0,
+      pass_interceptions: teamStats.passInterceptions || 0,
+      sacks: teamStats.sacks || 0,
+      sack_yards_lost: teamStats.sackYardsLost || 0,
+      sack_fumbles: teamStats.sackFumbles || 0,
+      sack_fumbles_lost: teamStats.sackFumblesLost || 0,
+      rec_fumbles: teamStats.recFumbles || 0,
+      rec_fumbles_lost: teamStats.recFumblesLost || 0,
+      first_downs: teamStats.firstDowns || 0,
+      third_down_attempts: teamStats.thirdDownAttempts || 0,
+      third_down_conversions: teamStats.thirdDownConversions || 0,
+      fourth_down_attempts: teamStats.fourthDownAttempts || 0,
+      fourth_down_conversions: teamStats.fourthDownConversions || 0,
+      xp_attempted: teamStats.xpAttempted || 0,
+      xp_made: teamStats.xpMade || 0,
+      two_pt_attempted: teamStats.twoPtAttempted || 0,
+      two_pt_made: teamStats.twoPtMade || 0,
+      fg_attempted: teamStats.fgAttempted || 0,
+      fg_made: teamStats.fgMade || 0,
+      safeties_scored: teamStats.safetiesScored || 0,
+      kick_return_attempts: teamStats.kickReturnAttempts || 0,
+      kick_return_yards: teamStats.kickReturnYards || 0,
+      kick_return_touchdowns: teamStats.kickReturnTouchdowns || 0,
+      punt_return_attempts: teamStats.puntReturnAttempts || 0,
+      punt_return_yards: teamStats.puntReturnYards || 0,
+      punt_return_touchdowns: teamStats.puntReturnTouchdowns || 0,
+      int_return_yards: teamStats.intReturnYards || 0,
+      int_return_touchdowns: teamStats.intReturnTouchdowns || 0,
+      time_of_possession: teamStats.timeOfPossession || 0,
+      turnovers: (teamStats.rushingFumblesLost || 0) + (teamStats.recFumblesLost || 0) +
+                 (teamStats.sackFumblesLost || 0) + (teamStats.passInterceptions || 0)
+    }
+  }
+
   // Save game results to database
   async function saveGameResults(finalState) {
     try {
@@ -81,23 +128,10 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
         home_score: finalState.score.home,
         away_score: finalState.score.away,
         total_plays: finalState.playNumber,
+        schedule_game_number: game.gameNumber,  // Link to schedule
         stats: [
-          {
-            team: finalState.homeTeam.id,
-            rushing_yards: finalState.homeStats.rushingYards,
-            passing_yards: finalState.homeStats.passYards,
-            total_yards: finalState.homeStats.rushingYards + finalState.homeStats.passYards,
-            turnovers: finalState.homeStats.rushingFumblesLost + finalState.homeStats.recFumblesLost +
-                       finalState.homeStats.sackFumblesLost + finalState.homeStats.passInterceptions
-          },
-          {
-            team: finalState.awayTeam.id,
-            rushing_yards: finalState.awayStats.rushingYards,
-            passing_yards: finalState.awayStats.passYards,
-            total_yards: finalState.awayStats.rushingYards + finalState.awayStats.passYards,
-            turnovers: finalState.awayStats.rushingFumblesLost + finalState.awayStats.recFumblesLost +
-                       finalState.awayStats.sackFumblesLost + finalState.awayStats.passInterceptions
-          }
+          statsToDbFormat(finalState.homeStats, finalState.homeTeam.id),
+          statsToDbFormat(finalState.awayStats, finalState.awayTeam.id)
         ],
         scoring_log: finalState.scoringLog || []
       }

@@ -54,6 +54,28 @@ h1 {
   margin-bottom: 30px;
 }
 
+/* Navigation Buttons */
+.nav-buttons {
+  margin-bottom: 20px;
+}
+
+.nav-btn {
+  background-color: #444;
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  font-size: 1em;
+  font-family: 'Courier New', monospace;
+  border-radius: 5px;
+  cursor: pointer;
+  margin: 0 5px;
+  transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+  background-color: #555;
+}
+
 /* Saved Game Section */
 .saved-game {
   background-color: #2a4a2a;
@@ -257,13 +279,17 @@ tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* W-L-T columns */
+/* W-L-T-PF-PA columns */
 th:nth-child(3),
 th:nth-child(4),
 th:nth-child(5),
+th:nth-child(6),
+th:nth-child(7),
 td:nth-child(3),
 td:nth-child(4),
-td:nth-child(5) {
+td:nth-child(5),
+td:nth-child(6),
+td:nth-child(7) {
   text-align: center;
   width: 50px;
 }

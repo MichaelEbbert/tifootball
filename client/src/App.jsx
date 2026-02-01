@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import logger from './utils/logger'
 import GameDisplay from './components/GameDisplay'
+import GameBrowser from './components/GameBrowser'
 
 const SAVED_GAME_KEY = 'tifootball_saved_game'
 
@@ -13,6 +14,7 @@ function App() {
   const [gameInProgress, setGameInProgress] = useState(false)
   const [currentGame, setCurrentGame] = useState(null)
   const [savedGameState, setSavedGameState] = useState(null)
+  const [showBrowser, setShowBrowser] = useState(false)
 
   useEffect(() => {
     // Check for saved game on load
@@ -128,10 +130,25 @@ function App() {
     )
   }
 
+  // Show game browser
+  if (showBrowser) {
+    return (
+      <div className="app">
+        <GameBrowser onBack={() => { setShowBrowser(false); fetchData(); }} />
+      </div>
+    )
+  }
+
   // Show home screen
   return (
     <div className="app">
       <h1>TI Football - 1979 Game Simulator</h1>
+
+      <div className="nav-buttons">
+        <button className="nav-btn" onClick={() => setShowBrowser(true)}>
+          View Schedule & Results
+        </button>
+      </div>
 
       {savedGameState && (
         <div className="saved-game">
@@ -220,6 +237,8 @@ function App() {
                     <th>W</th>
                     <th>L</th>
                     <th>T</th>
+                    <th>PF</th>
+                    <th>PA</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -232,6 +251,8 @@ function App() {
                         <td>{team.wins}</td>
                         <td>{team.losses}</td>
                         <td>{team.ties}</td>
+                        <td>{team.points_for || 0}</td>
+                        <td>{team.points_against || 0}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -253,6 +274,8 @@ function App() {
                     <th>W</th>
                     <th>L</th>
                     <th>T</th>
+                    <th>PF</th>
+                    <th>PA</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -265,6 +288,8 @@ function App() {
                         <td>{team.wins}</td>
                         <td>{team.losses}</td>
                         <td>{team.ties}</td>
+                        <td>{team.points_for || 0}</td>
+                        <td>{team.points_against || 0}</td>
                       </tr>
                     ))}
                 </tbody>
