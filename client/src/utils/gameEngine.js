@@ -472,7 +472,6 @@ function executeRun(gameState) {
  */
 function executePass(gameState, forcedType = null) {
   const stats = getStats(gameState, gameState.possession)
-  stats.passAttempts++
 
   // Determine pass type based on distance needed (or use forced type)
   // Short (0-9 air yards): for short yardage situations
@@ -553,6 +552,9 @@ function executePass(gameState, forcedType = null) {
     }
   }
 
+  // Sack check passed - this counts as a pass attempt
+  stats.passAttempts++
+
   // Generate air yards for this pass attempt
   const airYards = generateAirYards(passType)
 
@@ -580,6 +582,7 @@ function executePass(gameState, forcedType = null) {
 
     return {
       type: 'pass',
+      passType: passType,
       yards: 0,
       airYards: airYards,
       interception: true,
@@ -700,6 +703,7 @@ function executePass(gameState, forcedType = null) {
 
     return {
       type: 'pass',
+      passType: passType,
       yards: 0,
       airYards: airYards,
       complete: false,

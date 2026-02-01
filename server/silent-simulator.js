@@ -102,6 +102,11 @@ const stats = {
   totalPlays: 0,
   totalRushingYards: 0,
   totalRushingPlays: 0,
+  totalPassAttempts: 0,
+  totalPassCompletions: 0,
+  totalPassYards: 0,
+  totalInterceptions: 0,
+  totalSacks: 0,
   totalFirstDowns: 0,
   totalTouchdowns: 0,
   totalFumbles: 0,
@@ -139,6 +144,11 @@ for (let game = 0; game < numGames; game++) {
 
   stats.totalRushingYards += gameState.homeStats.rushingYards + gameState.awayStats.rushingYards
   stats.totalRushingPlays += gameState.homeStats.rushingAttempts + gameState.awayStats.rushingAttempts
+  stats.totalPassAttempts += gameState.homeStats.passAttempts + gameState.awayStats.passAttempts
+  stats.totalPassCompletions += gameState.homeStats.passCompletions + gameState.awayStats.passCompletions
+  stats.totalPassYards += gameState.homeStats.passYards + gameState.awayStats.passYards
+  stats.totalInterceptions += gameState.homeStats.passInterceptions + gameState.awayStats.passInterceptions
+  stats.totalSacks += gameState.homeStats.sacks + gameState.awayStats.sacks
   stats.totalFirstDowns += gameState.homeStats.firstDowns + gameState.awayStats.firstDowns
   const homeFumbles = gameState.homeStats.rushingFumblesLost + gameState.homeStats.recFumblesLost + gameState.homeStats.sackFumblesLost
   const awayFumbles = gameState.awayStats.rushingFumblesLost + gameState.awayStats.recFumblesLost + gameState.awayStats.sackFumblesLost
@@ -212,6 +222,19 @@ console.log(`\n🏃 Rushing:`)
 console.log(`  Avg yards/carry:            ${avgYardsPerCarry.toFixed(2)}`)
 console.log(`  Avg rushing yards/game:     ${avgRushingYardsPerGame.toFixed(1)}`)
 console.log(`  Avg rushing plays/game:     ${(stats.totalRushingPlays / stats.totalGames).toFixed(1)}`)
+
+const completionRate = (stats.totalPassCompletions / stats.totalPassAttempts * 100).toFixed(1)
+const avgPassYardsPerGame = stats.totalPassYards / stats.totalGames
+const avgPassAttemptsPerGame = stats.totalPassAttempts / stats.totalGames
+const interceptionRate = (stats.totalInterceptions / stats.totalPassAttempts * 100).toFixed(1)
+const sackRate = (stats.totalSacks / stats.totalPassAttempts * 100).toFixed(1)
+
+console.log(`\n🏈 Passing:`)
+console.log(`  Completion rate:            ${completionRate}% (${stats.totalPassCompletions}/${stats.totalPassAttempts})`)
+console.log(`  Avg pass attempts/game:     ${avgPassAttemptsPerGame.toFixed(1)}`)
+console.log(`  Avg passing yards/game:     ${avgPassYardsPerGame.toFixed(1)}`)
+console.log(`  Interception rate:          ${interceptionRate}%`)
+console.log(`  Sack rate:                  ${sackRate}%`)
 
 console.log(`\n📈 Game Flow:`)
 console.log(`  Avg plays/game:             ${avgPlaysPerGame.toFixed(1)}`)
