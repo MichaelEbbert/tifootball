@@ -370,7 +370,8 @@ function executeRun(gameState) {
 
   // 4th and 1 uses tighter defense (1-4 vs 1-4 instead of 1-4 vs 1-5)
   const isFourthAndOne = gameState.down === 4 && gameState.distance === 1
-  const runResult = runningPlay({ fourthAndOne: isFourthAndOne })
+  const yardsToGoal = 100 - gameState.yardline
+  const runResult = runningPlay({ fourthAndOne: isFourthAndOne, yardsToGoal })
   const yards = runResult.yards
   const steps = runResult.steps
   stats.rushingYards += yards
@@ -536,9 +537,38 @@ function executePass(gameState, forcedType = null) {
 
   // Check for completion
   if (Math.random() < GAME_CONSTANTS.PASS_COMPLETION[passType]) {
-    // Completed pass - add run after catch
-    const racResult = runAfterCatch()
-    const racYards = racResult.yards
+    // Check where the pass lands
+    const passLandsAt = gameState.yardline + airYards
+
+    // Pass out the back of the end zone (110+ yards) is incomplete
+    if (passLandsAt >= 110) {
+      updateDownAndDistance(gameState, 0)
+      return {
+        type: 'pass',
+        passType: passType,
+        yards: 0,
+        airYards: airYards,
+        complete: false,
+        outOfBounds: true,
+        description: `${passType.charAt(0).toUpperCase() + passType.slice(1)} pass out of bounds in end zone`
+      }
+    }
+
+    // Pass lands in end zone (100-109 yards) is immediate touchdown, no RAC
+    let racYards = 0
+    let racSteps = []
+    if (passLandsAt >= 100) {
+      // Caught in end zone - touchdown!
+      racYards = 0
+      racSteps = []
+    } else {
+      // Completed pass in field of play - add run after catch
+      const yardsToGoal = 100 - passLandsAt
+      const racResult = runAfterCatch({ yardsToGoal })
+      racYards = racResult.yards
+      racSteps = racResult.steps.map(step => airYards + step)  // Adjust steps for display
+    }
+
     const totalYards = airYards + racYards
 
     stats.passCompletions++
@@ -546,7 +576,8 @@ function executePass(gameState, forcedType = null) {
     stats.passRacYards += racYards
 
     // Check for fumble after catch (2% for now, will use RAC fumble rate later)
-    if (Math.random() < GAME_CONSTANTS.FUMBLE_RATE_PASS) {
+    // Only check if there was RAC (not if caught in end zone)
+    if (racYards > 0 && Math.random() < GAME_CONSTANTS.FUMBLE_RATE_PASS) {
       stats.recFumbles++
       if (Math.random() > GAME_CONSTANTS.FUMBLE_RECOVERY_OFFENSE) {
         // Defense recovers - turnover at the spot of the fumble
@@ -556,6 +587,7 @@ function executePass(gameState, forcedType = null) {
         changePossession(gameState, 0, true)  // Maintain field position
         return {
           type: 'pass',
+          passType: passType,
           yards: totalYards,
           complete: true,
           fumble: true,
@@ -567,6 +599,7 @@ function executePass(gameState, forcedType = null) {
         updateDownAndDistance(gameState, totalYards)
         return {
           type: 'pass',
+          passType: passType,
           yards: totalYards,
           complete: true,
           fumble: true,
@@ -585,12 +618,6 @@ function executePass(gameState, forcedType = null) {
 
     updateDownAndDistance(gameState, totalYards)
 
-    // Build RAC steps for animation (starting from airYards + 1)
-    const racSteps = []
-    for (let i = 1; i <= racYards; i++) {
-      racSteps.push(airYards + i)
-    }
-
     const result = {
       type: 'pass',
       passType: passType,
@@ -600,7 +627,9 @@ function executePass(gameState, forcedType = null) {
       racSteps: racSteps,
       complete: true,
       touchdown: isTouchdown,
-      description: `Pass complete for ${totalYards} yards (${airYards} air, ${racYards} RAC)`
+      description: isTouchdown && racYards === 0
+        ? `Pass complete for ${totalYards} yards in the end zone`
+        : `Pass complete for ${totalYards} yards (${airYards} air, ${racYards} RAC)`
     }
 
     // Add XP result and scoring log if touchdown

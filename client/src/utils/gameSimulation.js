@@ -62,13 +62,14 @@ export function generateAirYards(passType) {
  *
  * @param {Object} options - Optional parameters
  * @param {boolean} options.fourthAndOne - If true, use 1-4 vs 1-4 for first yard (75% conversion)
+ * @param {number} options.yardsToGoal - Yards to the goal line (stops running at touchdown)
  * @returns {Object} { yards, steps } - Yards gained and step-by-step progression
  */
 export function runningPlay(options = {}) {
   // DEBUG: Short circuit for testing touchdowns
   // return { yards: 15, steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }
 
-  const { fourthAndOne = false } = options
+  const { fourthAndOne = false, yardsToGoal = 100 } = options
   let yards = 0
   let tackled = false
   const steps = []  // Track each yard advanced
@@ -103,6 +104,11 @@ export function runningPlay(options = {}) {
       // Successful advance
       yards++
       steps.push(yards)
+
+      // Stop at goal line - touchdown!
+      if (yards >= yardsToGoal) {
+        break
+      }
     }
   }
 
@@ -113,9 +119,12 @@ export function runningPlay(options = {}) {
  * Run after catch (RAC) - uses same algorithm as running play
  * This happens after a completed pass
  *
- * @returns {number} Additional yards gained after catch
+ * @param {Object} options - Optional parameters
+ * @param {number} options.yardsToGoal - Yards to the goal line (stops running at touchdown)
+ * @returns {Object} { yards, steps } - Additional yards gained after catch
  */
-export function runAfterCatch() {
+export function runAfterCatch(options = {}) {
+  const { yardsToGoal = 100 } = options
   // Same algorithm as running, but we know they already have the ball
   // so no negative yards on first attempt
   let yards = 0
@@ -133,6 +142,11 @@ export function runAfterCatch() {
       // Successful advance
       yards++
       steps.push(yards)
+
+      // Stop at goal line - touchdown!
+      if (yards >= yardsToGoal) {
+        break
+      }
     }
   }
 

@@ -542,14 +542,34 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     )
   }
 
+  // Format down and distance for display
+  function formatDownDistance(down, distance) {
+    const ordinals = ['', '1st', '2nd', '3rd', '4th']
+    return `${ordinals[down]} & ${distance}`
+  }
+
+  // Get play type prefix for description
+  function getPlayTypePrefix(play) {
+    if (!play) return ''
+    if (play.type === 'run') return 'Run: '
+    if (play.type === 'pass') {
+      const passType = play.passType || 'short'
+      return `${passType.charAt(0).toUpperCase() + passType.slice(1)} Pass: `
+    }
+    return ''
+  }
+
   // Determine what to show in play result area
   function getPlayDisplay() {
     const playNum = prePlayState?.playNumber || gameState.playNumber
+    const down = prePlayState?.down || gameState.down
+    const distance = prePlayState?.distance || gameState.distance
+    const downDistStr = formatDownDistance(down, distance)
 
     if (animationPhase === 'running') {
       return (
         <div className="play-result">
-          <div className="play-number">Play #{playNum}</div>
+          <div className="play-number">Play #{playNum} ({downDistStr})</div>
           <div className="play-description running-animation">{runningText}</div>
         </div>
       )
@@ -558,12 +578,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     if (animationPhase === 'touchdown') {
       return (
         <div className="play-result touchdown-display">
-          <div className="play-number">Play #{playNum}</div>
+          <div className="play-number">Play #{playNum} ({downDistStr})</div>
           <div className="touchdown-text">TOUCHDOWN!</div>
           <div className="xp-result">
             {currentPlay?.xpGood ? 'XP Good!' : 'XP No Good'}
           </div>
-          <div className="play-description">{currentPlay?.description}</div>
+          <div className="play-description">{getPlayTypePrefix(currentPlay)}{currentPlay?.description}</div>
         </div>
       )
     }
@@ -571,8 +591,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     if ((animationPhase === 'result' || animationPhase === 'idle') && currentPlay) {
       return (
         <div className="play-result">
-          <div className="play-number">Play #{playNum}</div>
-          <div className="play-description">{currentPlay.description}</div>
+          <div className="play-number">Play #{playNum} ({downDistStr})</div>
+          <div className="play-description">{getPlayTypePrefix(currentPlay)}{currentPlay.description}</div>
           {currentPlay.turnover && <div className="turnover">TURNOVER!</div>}
         </div>
       )
