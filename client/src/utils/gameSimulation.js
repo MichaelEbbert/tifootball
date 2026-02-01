@@ -165,6 +165,20 @@ export function formatGameClock(totalSeconds) {
 }
 
 /**
+ * Generate punt distance using normal distribution
+ * Mean: 46 yards, StdDev: 7 yards
+ * Clamped to 25-65 yards (shanks to bombs)
+ *
+ * @returns {number} Punt air distance in yards
+ */
+export function generatePuntDistance() {
+  const mean = 46
+  const stdDev = 7
+  const distance = randomNormal(mean, stdDev)
+  return Math.max(25, Math.min(65, Math.round(distance)))
+}
+
+/**
  * Game state constants
  */
 export const QUARTERS = 4

@@ -8,6 +8,7 @@ import {
   runningPlay,
   runAfterCatch,
   generateAirYards,
+  generatePuntDistance,
   formatGameClock,
   QUARTER_LENGTH
 } from './gameSimulation.js'
@@ -313,8 +314,22 @@ function determinePlayType(gameState) {
     return forced
   }
 
-  // Rotation mode: cycle through run, short pass, medium pass
+  // Rotation mode: cycle through run, short pass, medium pass, long pass
   if (gameState.rotationMode) {
+    // On 4th down: punt if on own side, go for it if past midfield
+    if (gameState.down === 4) {
+      if (gameState.yardline < 50) {
+        return 'punt'
+      }
+      // Past midfield - go for it with next play in rotation
+    }
+
+    // Inside own 15: always run to avoid sack-safeties
+    // (Sacks can be up to 10 yards, so need buffer)
+    if (gameState.yardline <= 15) {
+      return 'run'
+    }
+
     const playType = PLAY_ROTATION[gameState.rotationIndex]
     gameState.rotationIndex = (gameState.rotationIndex + 1) % PLAY_ROTATION.length
     return playType
@@ -408,6 +423,20 @@ function executeRun(gameState) {
     }
   }
 
+  // Check for safety (stuffed run into end zone)
+  if (wouldBeSafety(gameState, yards)) {
+    gameState.yardline += yards  // Move to the spot (will be <= 0)
+    const safetyKick = executeSafety(gameState, 'run')
+    return {
+      type: 'run',
+      yards: yards,
+      steps: steps,
+      safety: true,
+      safetyKick: safetyKick,
+      description: `Tackled for a loss of ${Math.abs(yards)} yards in the end zone - SAFETY!`
+    }
+  }
+
   // Check if this will be a touchdown before updating
   const isTouchdown = gameState.yardline + yards >= 100
   const scoringTeam = gameState.possession  // Capture before possession might change
@@ -462,10 +491,27 @@ function executePass(gameState, forcedType = null) {
 
   // Check for sack (longer developing passes = higher sack rate)
   if (Math.random() < GAME_CONSTANTS.SACK_RATE[passType]) {
-    // Sack! Lose 3-10 yards
-    const sackYards = Math.floor(Math.random() * 8) + 3  // 3-10 yards lost
+    // Sack! Lose 3-10 yards (reduced when backed up near goal line)
+    let sackYards = Math.floor(Math.random() * 8) + 3  // 3-10 yards lost
+    if (gameState.yardline <= 10) {
+      // QB is more careful near own goal line - throw it away faster
+      sackYards = Math.floor(sackYards * 0.6)
+    }
     stats.sacks++
     stats.sackYardsLost += sackYards
+
+    // Check for safety first (sack into end zone)
+    if (wouldBeSafety(gameState, -sackYards)) {
+      gameState.yardline -= sackYards  // Move to the spot (will be <= 0)
+      const safetyKick = executeSafety(gameState, 'sack')
+      return {
+        type: 'sack',
+        yards: -sackYards,
+        safety: true,
+        safetyKick: safetyKick,
+        description: `SACK for ${sackYards} yard loss in the end zone - SAFETY!`
+      }
+    }
 
     // Check for strip sack (18% of sacks cause fumble)
     if (Math.random() < GAME_CONSTANTS.SACK_FUMBLE_RATE) {
@@ -664,34 +710,64 @@ function executePass(gameState, forcedType = null) {
 
 /**
  * Execute punt
+ * Punt is kicked from 7 yards behind line of scrimmage
  */
 function executePunt(gameState) {
-  const puntYards = GAME_CONSTANTS.PUNT_DISTANCE_AVG + (Math.random() * 20 - 10) // ±10 variance
+  const SNAP_DISTANCE = 7
+  const puntAirYards = generatePuntDistance()
+
+  // Punt is kicked from 7 yards behind line of scrimmage
+  const kickSpot = gameState.yardline - SNAP_DISTANCE
+  const landSpot = kickSpot + puntAirYards
+
+  // Check for touchback (ball lands in or past end zone)
+  if (landSpot >= 100) {
+    // Touchback - receiving team gets ball at their 20
+    const netPuntYards = 100 - gameState.yardline  // Punted to goal line essentially
+    gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+    gameState.yardline = 20
+    gameState.down = 1
+    gameState.distance = 10
+
+    return {
+      type: 'punt',
+      yards: puntAirYards,
+      netYards: netPuntYards,
+      touchback: true,
+      description: `Punt ${puntAirYards} yards, touchback`
+    }
+  }
+
+  // Net punt yards from line of scrimmage
+  const netPuntYards = landSpot - gameState.yardline
 
   // Fair catch?
   if (Math.random() < GAME_CONSTANTS.FAIR_CATCH_PCT) {
-    changePossession(gameState, Math.floor(puntYards))
+    changePossession(gameState, netPuntYards)
     return {
       type: 'punt',
-      yards: Math.floor(puntYards),
+      yards: puntAirYards,
+      netYards: netPuntYards,
       fairCatch: true,
-      description: `Punt ${Math.floor(puntYards)} yards, fair catch`
+      description: `Punt ${puntAirYards} yards, fair catch at the ${100 - landSpot}`
     }
   }
 
   // Return
-  const racResult = runAfterCatch()
+  const yardsToGoal = landSpot  // Returner's distance to their own goal (which is opponent's end zone)
+  const racResult = runAfterCatch({ yardsToGoal: 100 - landSpot })  // Distance to scoring end zone
   const returnYards = racResult.yards
   const defenseStats = getStats(gameState, gameState.possession === 'home' ? 'away' : 'home')
   defenseStats.puntReturnYards += returnYards
 
-  changePossession(gameState, Math.floor(puntYards) + returnYards)
+  changePossession(gameState, netPuntYards - returnYards)
 
   return {
     type: 'punt',
-    yards: Math.floor(puntYards),
+    yards: puntAirYards,
+    netYards: netPuntYards - returnYards,
     returnYards: returnYards,
-    description: `Punt ${Math.floor(puntYards)} yards, returned ${returnYards} yards`
+    description: `Punt ${puntAirYards} yards, returned ${returnYards} yards`
   }
 }
 
@@ -740,6 +816,69 @@ function executeFieldGoal(gameState) {
 }
 
 /**
+ * Check if a play would result in a safety
+ * @returns {boolean} true if the new yardline would be at or behind own goal line
+ */
+function wouldBeSafety(gameState, yards) {
+  return gameState.yardline + yards <= 0
+}
+
+/**
+ * Execute a safety - award points and execute safety kick
+ * @param {Object} gameState - Current game state
+ * @param {string} playType - 'run' or 'sack' for scoring log
+ */
+function executeSafety(gameState, playType) {
+  const offense = gameState.possession
+  const defense = offense === 'home' ? 'away' : 'home'
+
+  // Award 2 points to defense
+  gameState.score[defense] += 2
+  logger.info(`🚨 SAFETY! ${defense} scores 2 points. Score: ${gameState.score.home}-${gameState.score.away}`)
+
+  // Add scoring entry
+  addScoringEntry(gameState, 'SAFETY', playType, 0, null, defense)
+
+  // Safety kick: offense punts from their own 20
+  // Generate punt distance and handle like a normal punt
+  const SAFETY_KICK_SPOT = 20
+  const puntAirYards = generatePuntDistance()
+  const landSpot = SAFETY_KICK_SPOT + puntAirYards
+
+  // Check for touchback on safety kick
+  if (landSpot >= 100) {
+    // Touchback - receiving team gets ball at their 20
+    gameState.possession = defense
+    gameState.yardline = 20
+    gameState.down = 1
+    gameState.distance = 10
+    return { puntYards: puntAirYards, touchback: true }
+  }
+
+  // Fair catch or return
+  if (Math.random() < GAME_CONSTANTS.FAIR_CATCH_PCT) {
+    gameState.possession = defense
+    gameState.yardline = 100 - landSpot
+    gameState.down = 1
+    gameState.distance = 10
+    return { puntYards: puntAirYards, fairCatch: true, landSpot: 100 - landSpot }
+  }
+
+  // Return the safety kick
+  const racResult = runAfterCatch({ yardsToGoal: 100 - landSpot })
+  const returnYards = racResult.yards
+  const defenseStats = getStats(gameState, defense)
+  defenseStats.puntReturnYards += returnYards
+
+  gameState.possession = defense
+  gameState.yardline = 100 - landSpot + returnYards
+  gameState.down = 1
+  gameState.distance = 10
+
+  return { puntYards: puntAirYards, returnYards: returnYards }
+}
+
+/**
  * Update down and distance after a play
  */
 function updateDownAndDistance(gameState, yards) {
@@ -769,13 +908,10 @@ function updateDownAndDistance(gameState, yards) {
     return
   }
 
-  // Check for safety
+  // Safety check moved to individual play handlers for proper result reporting
+  // This is a fallback that shouldn't normally trigger
   if (gameState.yardline <= 0) {
-    const defense = gameState.possession === 'home' ? 'away' : 'home'
-    gameState.score[defense] += 2
-    // Add scoring entry for the defense
-    addScoringEntry(gameState, 'SAFETY', 'tackle', 0, null, defense)
-    changePossession(gameState, 20) // Free kick from 20
+    executeSafety(gameState, 'tackle')
     return
   }
 

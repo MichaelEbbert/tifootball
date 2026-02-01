@@ -29,6 +29,7 @@ const { runningPlay } = await import(gameSimPath)
 const args = process.argv.slice(2)
 let numGames = 100
 let fourthDownTest = false
+let rotationMode = false
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--games' && args[i + 1]) {
@@ -36,6 +37,9 @@ for (let i = 0; i < args.length; i++) {
   }
   if (args[i] === '--4th-down') {
     fourthDownTest = true
+  }
+  if (args[i] === '--rotation') {
+    rotationMode = true
   }
 }
 
@@ -101,6 +105,7 @@ const stats = {
   totalFirstDowns: 0,
   totalTouchdowns: 0,
   totalFumbles: 0,
+  totalSafeties: 0,
   homeWins: 0,
   awayWins: 0,
   ties: 0,
@@ -112,13 +117,13 @@ const stats = {
 
 console.log(`\n🏈 Silent Simulator`)
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-console.log(`Running ${numGames} games...\n`)
+console.log(`Running ${numGames} games...${rotationMode ? ' (rotation mode)' : ''}\n`)
 
 const startTime = Date.now()
 
 // Run simulations
 for (let game = 0; game < numGames; game++) {
-  const gameState = initializeGame(homeTeam, awayTeam, true) // simplified mode
+  const gameState = initializeGame(homeTeam, awayTeam, true, rotationMode) // simplified mode, optional rotation
 
   // Run until game is over
   while (!isGameOver(gameState)) {
@@ -132,15 +137,20 @@ for (let game = 0; game < numGames; game++) {
   stats.totalPoints += totalGamePoints
   stats.totalPlays += gameState.playNumber
 
-  stats.totalRushingYards += gameState.homeStats.runningYards + gameState.awayStats.runningYards
-  stats.totalRushingPlays += gameState.homeStats.runningPlays + gameState.awayStats.runningPlays
+  stats.totalRushingYards += gameState.homeStats.rushingYards + gameState.awayStats.rushingYards
+  stats.totalRushingPlays += gameState.homeStats.rushingAttempts + gameState.awayStats.rushingAttempts
   stats.totalFirstDowns += gameState.homeStats.firstDowns + gameState.awayStats.firstDowns
-  stats.totalFumbles += gameState.homeStats.fumblesLost + gameState.awayStats.fumblesLost
+  const homeFumbles = gameState.homeStats.rushingFumblesLost + gameState.homeStats.recFumblesLost + gameState.homeStats.sackFumblesLost
+  const awayFumbles = gameState.awayStats.rushingFumblesLost + gameState.awayStats.recFumblesLost + gameState.awayStats.sackFumblesLost
+  stats.totalFumbles += homeFumbles + awayFumbles
 
-  // Count touchdowns (score / 6, since simplified mode has no XP)
-  const homeTDs = Math.floor(gameState.score.home / 6)
-  const awayTDs = Math.floor(gameState.score.away / 6)
-  stats.totalTouchdowns += homeTDs + awayTDs
+  // Count touchdowns and safeties from scoring log
+  if (gameState.scoringLog) {
+    for (const entry of gameState.scoringLog) {
+      if (entry.score_type === 'TD') stats.totalTouchdowns++
+      if (entry.score_type === 'SAFETY') stats.totalSafeties++
+    }
+  }
 
   // Win/loss tracking
   if (gameState.score.home > gameState.score.away) {
@@ -193,6 +203,7 @@ console.log(`\n🏆 Scoring:`)
 console.log(`  Avg points/game (total):    ${avgPointsPerGame.toFixed(1)}`)
 console.log(`  Avg points/team/game:       ${avgPointsPerTeam.toFixed(1)}`)
 console.log(`  Avg touchdowns/game:        ${avgTDsPerGame.toFixed(2)}`)
+console.log(`  Total safeties:             ${stats.totalSafeties} (${(stats.totalSafeties / stats.totalGames).toFixed(2)}/game)`)
 console.log(`  High score (single team):   ${stats.highScore}`)
 console.log(`  Low score (single team):    ${stats.lowScore}`)
 console.log(`  Shutouts:                   ${stats.shutouts} (${(stats.shutouts / stats.totalGames / 2 * 100).toFixed(1)}% of teams)`)
