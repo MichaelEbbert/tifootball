@@ -7,6 +7,7 @@ import {
   generatePlayTime,
   runningPlay,
   runAfterCatch,
+  kickoffReturn,
   generateAirYards,
   generatePuntDistance,
   formatGameClock,
@@ -142,6 +143,7 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
       fourthDownConversions: 0,
       // Other
       timeOfPossession: 0,
+      kickReturnAttempts: 0,
       kickReturnYards: 0,
       puntReturnYards: 0,
       interceptionReturnYards: 0,
@@ -150,7 +152,8 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
       xpAttempted: 0,
       xpMade: 0,
       twoPtAttempted: 0,
-      twoPtMade: 0
+      twoPtMade: 0,
+      safetiesScored: 0
     },
 
     // Stats - Away Team
@@ -184,6 +187,7 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
       fourthDownConversions: 0,
       // Other
       timeOfPossession: 0,
+      kickReturnAttempts: 0,
       kickReturnYards: 0,
       puntReturnYards: 0,
       interceptionReturnYards: 0,
@@ -192,7 +196,8 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
       xpAttempted: 0,
       xpMade: 0,
       twoPtAttempted: 0,
-      twoPtMade: 0
+      twoPtMade: 0,
+      safetiesScored: 0
     }
   }
 }
@@ -842,9 +847,11 @@ function wouldBeSafety(gameState, yards) {
 function executeSafety(gameState, playType) {
   const offense = gameState.possession
   const defense = offense === 'home' ? 'away' : 'home'
+  const defenseStats = getStats(gameState, defense)
 
-  // Award 2 points to defense
+  // Award 2 points to defense and track stat
   gameState.score[defense] += 2
+  defenseStats.safetiesScored++
   logger.info(`🚨 SAFETY! ${defense} scores 2 points. Score: ${gameState.score.home}-${gameState.score.away}`)
 
   // Add scoring entry
@@ -878,7 +885,6 @@ function executeSafety(gameState, playType) {
   // Return the safety kick
   const racResult = runAfterCatch({ yardsToGoal: 100 - landSpot })
   const returnYards = racResult.yards
-  const defenseStats = getStats(gameState, defense)
   defenseStats.puntReturnYards += returnYards
 
   gameState.possession = defense
@@ -968,25 +974,39 @@ function attemptExtraPoint(gameState) {
 
 /**
  * Execute kickoff
+ * Starting position: 5-8 yard line (evenly distributed)
+ * Return algorithm: 1-4 vs 1-40 gauntlet, then run mode
  */
 function kickoff(gameState) {
   const receiver = gameState.possession === 'home' ? 'away' : 'home'
+  const receiverStats = getStats(gameState, receiver)
 
   if (Math.random() < GAME_CONSTANTS.TOUCHBACK_PCT) {
     gameState.possession = receiver
-    gameState.yardline = 25
+    gameState.yardline = 30  // 2024 NFL touchback rule (35 in 2025)
     gameState.down = 1
     gameState.distance = 10
   } else {
-    const racResult = runAfterCatch()
-    const returnYards = racResult.yards
-    const receiverStats = getStats(gameState, receiver)
+    // Starting position: evenly distributed 5-8 yard line
+    const startYardline = 5 + Math.floor(Math.random() * 4)  // 5, 6, 7, or 8
+    const yardsToGoal = 100 - startYardline
+
+    receiverStats.kickReturnAttempts++
+    const returnResult = kickoffReturn({ yardsToGoal })
+    const returnYards = returnResult.yards
     receiverStats.kickReturnYards += returnYards
 
     gameState.possession = receiver
-    gameState.yardline = GAME_CONSTANTS.KICKOFF_RETURN_START + returnYards
+    gameState.yardline = startYardline + returnYards
     gameState.down = 1
     gameState.distance = 10
+
+    // Check for kick return touchdown
+    if (gameState.yardline >= 100) {
+      gameState.yardline = 100
+      // TD will be handled by next play or we need to score it here
+      // For now, just cap at 100 - the yardline check will handle it
+    }
   }
 }
 

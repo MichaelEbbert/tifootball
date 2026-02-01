@@ -422,22 +422,29 @@ The original 1979 algorithm (1-4 vs 1-5) produced 3.7 yards per carry. To match 
 
 This gives slightly above-NFL average, making for exciting games while staying realistic.
 
-## TODO / Future Enhancements
+## Mechanics to Implement
 
-> **Note:** When Michael is ready to address these he'll tell me something like "ok let's work on the todos". If not, I should remind him every couple weeks.
+1. Kickoff returns with TD possibility (currently just touchback or start at yard 5 + RAC)
+2. Punt return touchdowns
+3. 2-point conversion attempts (stats tracked but always kicks XP)
+4. Interception return touchdowns
+5. Penalties (false start, holding, pass interference, etc.)
+6. Coach AI using play tendency tables
+7. Coach AI using fourth down tendency tables
+8. Coach AI using red zone tendency tables
 
-### Scoring & Special Teams
-- [ ] Kick return touchdowns (currently returns don't check for 95+ yard TD)
-- [ ] Punt return touchdowns
-- [ ] Interception return touchdowns
-- [ ] Fumble return touchdowns
-- [ ] Blocked punt touchdowns
+## Mechanics to Table Long Term
 
-### Defensive Tactics
-- [ ] Blitzing (higher sack rate, higher big play risk)
-- [ ] Coverage schemes affecting pass completion rates
-
-### Coach AI
-- [ ] Use coach_play_tendencies table for play calling
-- [ ] Use coach_fourth_down_tendencies for 4th down decisions
-- [ ] Use coach_red_zone_tendencies in red zone
+1. Kickoff out of bounds penalty
+2. Onside kicks
+3. Field goal blocks
+4. Missed FG return for TD
+5. Punt blocks (was in original 1979 game)
+6. Fumble return touchdowns
+7. Two-minute warning
+8. Timeouts
+9. Spike plays (stop clock)
+10. Kneel down plays (was in original 1979 game)
+11. Overtime rules
+12. Blitzing (higher sack rate, higher big play risk)
+13. Coverage schemes affecting pass completion rates

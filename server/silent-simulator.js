@@ -107,6 +107,8 @@ const stats = {
   totalPassYards: 0,
   totalInterceptions: 0,
   totalSacks: 0,
+  totalKickReturns: 0,
+  totalKickReturnYards: 0,
   totalFirstDowns: 0,
   totalTouchdowns: 0,
   totalFumbles: 0,
@@ -149,6 +151,8 @@ for (let game = 0; game < numGames; game++) {
   stats.totalPassYards += gameState.homeStats.passYards + gameState.awayStats.passYards
   stats.totalInterceptions += gameState.homeStats.passInterceptions + gameState.awayStats.passInterceptions
   stats.totalSacks += gameState.homeStats.sacks + gameState.awayStats.sacks
+  stats.totalKickReturns += gameState.homeStats.kickReturnAttempts + gameState.awayStats.kickReturnAttempts
+  stats.totalKickReturnYards += gameState.homeStats.kickReturnYards + gameState.awayStats.kickReturnYards
   stats.totalFirstDowns += gameState.homeStats.firstDowns + gameState.awayStats.firstDowns
   const homeFumbles = gameState.homeStats.rushingFumblesLost + gameState.homeStats.recFumblesLost + gameState.homeStats.sackFumblesLost
   const awayFumbles = gameState.awayStats.rushingFumblesLost + gameState.awayStats.recFumblesLost + gameState.awayStats.sackFumblesLost
@@ -235,6 +239,14 @@ console.log(`  Avg pass attempts/game:     ${avgPassAttemptsPerGame.toFixed(1)}`
 console.log(`  Avg passing yards/game:     ${avgPassYardsPerGame.toFixed(1)}`)
 console.log(`  Interception rate:          ${interceptionRate}%`)
 console.log(`  Sack rate:                  ${sackRate}%`)
+
+if (stats.totalKickReturns > 0) {
+  const avgKickReturnYards = stats.totalKickReturnYards / stats.totalKickReturns
+  console.log(`\n⚡ Kick Returns:`)
+  console.log(`  Total returns:              ${stats.totalKickReturns}`)
+  console.log(`  Avg yards/return:           ${avgKickReturnYards.toFixed(1)}`)
+  console.log(`  Avg returns/game:           ${(stats.totalKickReturns / stats.totalGames).toFixed(2)}`)
+}
 
 console.log(`\n📈 Game Flow:`)
 console.log(`  Avg plays/game:             ${avgPlaysPerGame.toFixed(1)}`)

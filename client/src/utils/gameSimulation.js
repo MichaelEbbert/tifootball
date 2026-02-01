@@ -154,6 +154,57 @@ export function runAfterCatch(options = {}) {
 }
 
 /**
+ * Kickoff return algorithm
+ * Phase 1: Gauntlet - defense range starts at 40 and decreases to 4
+ * Phase 2: Run mode - same as regular running (1-4 vs 1-5, then 1-4 vs 1-7 after 6 yards)
+ *
+ * @param {Object} options - Optional parameters
+ * @param {number} options.yardsToGoal - Yards to the goal line (stops at touchdown)
+ * @returns {Object} { yards, steps } - Yards gained and step-by-step progression
+ */
+export function kickoffReturn(options = {}) {
+  const { yardsToGoal = 100 } = options
+  let yards = 0
+  const steps = []
+
+  // Phase 1: Gauntlet (defense range 40 down to 4)
+  for (let defenseRange = 40; defenseRange >= 4; defenseRange--) {
+    const playerChoice = Math.floor(Math.random() * 4) + 1  // 1-4
+    const defenseChoice = Math.floor(Math.random() * defenseRange) + 1
+
+    if (playerChoice === defenseChoice) {
+      return { yards, steps }  // Tackled
+    }
+    yards++
+    steps.push(yards)
+
+    if (yards >= yardsToGoal) {
+      return { yards, steps }  // Touchdown
+    }
+  }
+
+  // Phase 2: Run mode (escaped gauntlet)
+  // First 6 yards: 1-4 vs 1-5, then 1-4 vs 1-7
+  let runYards = 0
+  while (true) {
+    const playerChoice = Math.floor(Math.random() * 4) + 1
+    const defenseRange = runYards < 6 ? 5 : 7
+    const defenseChoice = Math.floor(Math.random() * defenseRange) + 1
+
+    if (playerChoice === defenseChoice) {
+      return { yards, steps }  // Tackled
+    }
+    yards++
+    runYards++
+    steps.push(yards)
+
+    if (yards >= yardsToGoal) {
+      return { yards, steps }  // Touchdown
+    }
+  }
+}
+
+/**
  * Format seconds as MM:SS for game clock display
  * @param {number} totalSeconds
  * @returns {string} Formatted time (e.g., "12:45")

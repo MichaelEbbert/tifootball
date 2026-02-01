@@ -481,6 +481,18 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 <span>2-PT:</span>
                 <span>{gameState.homeStats.twoPtMade || 0}/{gameState.homeStats.twoPtAttempted || 0}</span>
               </div>
+              {(gameState.homeStats.kickReturnAttempts > 0) && (
+                <div className="stat-line">
+                  <span>Kick Returns:</span>
+                  <span>{gameState.homeStats.kickReturnAttempts} ret, {gameState.homeStats.kickReturnYards} yds</span>
+                </div>
+              )}
+              {(gameState.homeStats.safetiesScored > 0) && (
+                <div className="stat-line">
+                  <span>Safeties:</span>
+                  <span>{gameState.homeStats.safetiesScored}</span>
+                </div>
+              )}
               <div className="stat-line">
                 <span>Time of Possession:</span>
                 <span>{formatGameClock(gameState.homeStats.timeOfPossession)}</span>
@@ -521,6 +533,18 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 <span>2-PT:</span>
                 <span>{gameState.awayStats.twoPtMade || 0}/{gameState.awayStats.twoPtAttempted || 0}</span>
               </div>
+              {(gameState.awayStats.kickReturnAttempts > 0) && (
+                <div className="stat-line">
+                  <span>Kick Returns:</span>
+                  <span>{gameState.awayStats.kickReturnAttempts} ret, {gameState.awayStats.kickReturnYards} yds</span>
+                </div>
+              )}
+              {(gameState.awayStats.safetiesScored > 0) && (
+                <div className="stat-line">
+                  <span>Safeties:</span>
+                  <span>{gameState.awayStats.safetiesScored}</span>
+                </div>
+              )}
               <div className="stat-line">
                 <span>Time of Possession:</span>
                 <span>{formatGameClock(gameState.awayStats.timeOfPossession)}</span>
@@ -881,6 +905,18 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             <span>2-PT:</span>
             <span>{gameState.homeStats.twoPtMade || 0}/{gameState.homeStats.twoPtAttempted || 0}</span>
           </div>
+          {(gameState.homeStats.kickReturnAttempts > 0) && (
+            <div className="stat-line">
+              <span>Kick Returns:</span>
+              <span>{gameState.homeStats.kickReturnAttempts} ret, {gameState.homeStats.kickReturnYards} yds</span>
+            </div>
+          )}
+          {(gameState.homeStats.safetiesScored > 0) && (
+            <div className="stat-line">
+              <span>Safeties:</span>
+              <span>{gameState.homeStats.safetiesScored}</span>
+            </div>
+          )}
           <div className="stat-line">
             <span>Time of Possession:</span>
             <span>{formatGameClock(gameState.homeStats.timeOfPossession)}</span>
@@ -921,6 +957,18 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             <span>2-PT:</span>
             <span>{gameState.awayStats.twoPtMade || 0}/{gameState.awayStats.twoPtAttempted || 0}</span>
           </div>
+          {(gameState.awayStats.kickReturnAttempts > 0) && (
+            <div className="stat-line">
+              <span>Kick Returns:</span>
+              <span>{gameState.awayStats.kickReturnAttempts} ret, {gameState.awayStats.kickReturnYards} yds</span>
+            </div>
+          )}
+          {(gameState.awayStats.safetiesScored > 0) && (
+            <div className="stat-line">
+              <span>Safeties:</span>
+              <span>{gameState.awayStats.safetiesScored}</span>
+            </div>
+          )}
           <div className="stat-line">
             <span>Time of Possession:</span>
             <span>{formatGameClock(gameState.awayStats.timeOfPossession)}</span>
