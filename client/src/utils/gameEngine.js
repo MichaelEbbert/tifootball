@@ -75,7 +75,13 @@ const PLAY_ROTATION = ['run', 'run', 'short', 'short', 'medium', 'medium', 'long
  * @param {boolean} rotationMode - If true, use fixed play rotation (3 run, 3 short, 3 medium)
  */
 export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotationMode = false) {
+  // Coin toss - winner receives first, loser receives at halftime
+  const coinToss = Math.random() < 0.5 ? 'home' : 'away'
+  const firstHalfReceiver = coinToss
+  const secondHalfReceiver = coinToss === 'home' ? 'away' : 'home'
+
   logger.info(`Game initialized: ${awayTeam.name} @ ${homeTeam.name}${simplifiedMode ? ' (Simplified Mode)' : ''}${rotationMode ? ' (Rotation Mode)' : ''}`)
+  logger.info(`Coin toss: ${coinToss === 'home' ? homeTeam.name : awayTeam.name} wins, receives first`)
 
   return {
     // Game mode
@@ -86,7 +92,8 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
     // Teams
     homeTeam,
     awayTeam,
-    possession: 'away', // Away team starts with ball
+    possession: firstHalfReceiver,
+    secondHalfReceiver,  // Team that receives at halftime
 
     // Score
     score: { home: 0, away: 0 },
@@ -1008,15 +1015,17 @@ function advanceQuarter(gameState) {
   gameState.quarter++
   gameState.clock = QUARTER_LENGTH
 
-  // Halftime - other team gets the ball
+  // Halftime - second half receiver gets the ball
   if (gameState.quarter === 3) {
     if (gameState.simplifiedMode) {
-      // Simplified mode: swap possession, start at own 35
-      gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+      // Simplified mode: second half receiver starts at own 35
+      gameState.possession = gameState.secondHalfReceiver
       gameState.yardline = 35
       gameState.down = 1
       gameState.distance = 10
     } else {
+      // Set possession to kicking team so kickoff gives ball to receiver
+      gameState.possession = gameState.secondHalfReceiver === 'home' ? 'away' : 'home'
       kickoff(gameState)
     }
   }
