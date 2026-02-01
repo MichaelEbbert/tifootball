@@ -124,6 +124,11 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
     // Field state
     quarter: 1,
     clock: QUARTER_LENGTH, // seconds remaining in quarter
+
+    // Overtime state
+    overtime: false,
+    overtimePossessions: { home: false, away: false },  // Track who has had possession
+    overtimeFirstPossession: true,  // Is this the first OT possession?
     down: 1,
     distance: 10,
     yardline: 35, // Starting field position (own 35)
@@ -320,7 +325,13 @@ export function executePlay(gameState) {
   if (gameState.clock <= 0 && gameState.quarter < 4) {
     advanceQuarter(gameState)
   }
-  // Q4 clock expiring ends the game (handled by isGameOver check)
+  // Q4 clock expiring - check for overtime
+  if (gameState.clock <= 0 && gameState.quarter === 4 && !gameState.overtime) {
+    if (gameState.score.home === gameState.score.away) {
+      startOvertime(gameState)
+    }
+  }
+  // OT clock expiring ends the game (handled by isGameOver check)
 
   // Log the play
   gameState.playLog.push({
@@ -1365,6 +1376,7 @@ function kickoff(gameState) {
     gameState.yardline = 30  // 2024 NFL touchback rule (35 in 2025)
     gameState.down = 1
     gameState.distance = 10
+    markOvertimePossession(gameState)
   } else {
     // Starting position: evenly distributed 5-8 yard line
     const startYardline = 5 + Math.floor(Math.random() * 4)  // 5, 6, 7, or 8
@@ -1379,6 +1391,11 @@ function kickoff(gameState) {
     gameState.yardline = startYardline + returnYards
     gameState.down = 1
     gameState.distance = 10
+
+    // Mark overtime possession (unless kick return TD, which leads to another kickoff)
+    if (gameState.yardline < 100) {
+      markOvertimePossession(gameState)
+    }
 
     // Check for kick return touchdown
     if (gameState.yardline >= 100) {
@@ -1427,6 +1444,9 @@ function changePossession(gameState, fieldChange, turnoverOnDowns = false) {
 
   gameState.down = 1
   gameState.distance = 10
+
+  // Track overtime possessions
+  markOvertimePossession(gameState)
 }
 
 /**
@@ -1453,9 +1473,86 @@ function advanceQuarter(gameState) {
 }
 
 /**
+ * Start overtime period
+ * - Random coin toss for kickoff
+ * - 15 minute clock
+ * - Each team gets at least one possession (unless defensive TD)
+ */
+function startOvertime(gameState) {
+  gameState.overtime = true
+  gameState.quarter = 5  // OT is "5th quarter"
+  gameState.clock = 900  // 15 minutes
+  gameState.overtimePossessions = { home: false, away: false }
+  gameState.overtimeFirstPossession = true
+
+  // Random coin toss for OT kickoff
+  const otReceiver = Math.random() < 0.5 ? 'home' : 'away'
+  const otKicker = otReceiver === 'home' ? 'away' : 'home'
+
+  logger.info(`⏰ OVERTIME! Coin toss: ${otReceiver === 'home' ? gameState.homeTeam.name : gameState.awayTeam.name} receives`)
+
+  if (gameState.simplifiedMode) {
+    gameState.possession = otReceiver
+    gameState.yardline = 35
+    gameState.down = 1
+    gameState.distance = 10
+    gameState.overtimePossessions[otReceiver] = true
+  } else {
+    gameState.possession = otKicker
+    kickoff(gameState)
+    // Mark the receiving team as having possession
+    gameState.overtimePossessions[otReceiver] = true
+  }
+}
+
+/**
+ * Mark overtime possession for current team
+ * Called when possession changes
+ */
+function markOvertimePossession(gameState) {
+  if (gameState.overtime) {
+    gameState.overtimePossessions[gameState.possession] = true
+    // After first possession changes, no longer first possession
+    if (gameState.overtimeFirstPossession) {
+      gameState.overtimeFirstPossession = false
+    }
+  }
+}
+
+/**
  * Check if game is over
  */
 export function isGameOver(gameState) {
-  // Game ends when Q4 clock expires (or if somehow quarter > 4)
-  return gameState.quarter > 4 || (gameState.quarter === 4 && gameState.clock <= 0)
+  // Regular game: Q4 clock expires with different scores
+  if (!gameState.overtime && gameState.quarter === 4 && gameState.clock <= 0) {
+    // If tied, overtime will be triggered - not over yet
+    return gameState.score.home !== gameState.score.away
+  }
+
+  // Overtime rules
+  if (gameState.overtime) {
+    const tied = gameState.score.home === gameState.score.away
+
+    // OT clock expired - game ends (possibly as tie)
+    if (gameState.clock <= 0) {
+      return true
+    }
+
+    // If not tied, check possession rules
+    if (!tied) {
+      // Both teams have had possession - any lead wins
+      if (gameState.overtimePossessions.home && gameState.overtimePossessions.away) {
+        return true
+      }
+      // First possession ended without both teams possessing
+      // This means defensive TD (pick-6, fumble return, safety)
+      // Immediate win for defense
+      if (!gameState.overtimeFirstPossession &&
+          (!gameState.overtimePossessions.home || !gameState.overtimePossessions.away)) {
+        return true
+      }
+    }
+  }
+
+  return false
 }

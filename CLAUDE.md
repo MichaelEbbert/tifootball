@@ -425,9 +425,8 @@ This gives slightly above-NFL average, making for exciting games while staying r
 ## Mechanics to Implement
 
 1. Penalties (false start, holding, pass interference, etc.)
-2. Overtime rules (eliminate ties)
-3. Coach AI using fourth down tendency tables
-4. Coach AI using red zone tendency tables
+2. Coach AI using fourth down tendency tables
+3. Coach AI using red zone tendency tables
 
 ## Mechanics Completed
 
@@ -438,6 +437,7 @@ This gives slightly above-NFL average, making for exciting games while staying r
 - ✅ Punt return touchdowns
 - ✅ Interception return touchdowns (pick-sixes)
 - ✅ Coach AI using play tendency tables (run/short/medium/long per situation)
+- ✅ Overtime (15 min, each team possesses once unless defensive TD, tie if clock expires)
 
 ## Coach Tendency System
 
