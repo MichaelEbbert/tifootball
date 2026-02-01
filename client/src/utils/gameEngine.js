@@ -1089,13 +1089,64 @@ function shouldAttemptFieldGoal(gameState) {
   const theirScore = gameState.score[gameState.possession === 'home' ? 'away' : 'home']
   const scoreDiff = ourScore - theirScore
 
-  // Q4 decision tree based on score
+  // Q4 decision tree based on score AND clock
   if (quarter === 4) {
+    const timeLeft = gameState.clock  // seconds remaining
+
+    // DESPERATION MODE: Under 2 minutes, down by any amount
+    if (timeLeft < 120 && scoreDiff < 0) {
+      // Down 2+ scores with under 2 min = must go for it
+      if (scoreDiff <= -8) {
+        return 'go'  // Need TDs, no time for FGs
+      }
+      // Down 4-7 (one score) under 2 min
+      if (scoreDiff <= -4) {
+        if (distance <= 4) return 'go'  // Go for it on 4th and 4 or less
+        if (fgDistance <= 35) return 'fieldgoal'  // Chip shot only
+        return 'go'
+      }
+      // Down 1-3, FG ties or wins
+      return 'fieldgoal'
+    }
+
+    // CLOCK KILLING: Under 2 minutes, winning
+    if (timeLeft < 120 && scoreDiff > 0) {
+      // Up by any amount, take easy FGs to extend
+      if (fgDistance <= 40) return 'fieldgoal'
+      // Up big, don't risk turnover on downs
+      if (scoreDiff > 7) return 'punt'
+      // Up small, consider going for it to ice the game
+      if (distance <= 2) return 'go'
+      return 'punt'
+    }
+
+    // LATE GAME: 2-5 minutes left
+    if (timeLeft < 300) {
+      // Down 2+ scores
+      if (scoreDiff <= -8) {
+        if (fgDistance > 40) return 'go'  // Skip long FGs
+        if (distance <= 3) return 'go'
+        return 'fieldgoal'  // Take chip shots
+      }
+      // Down 4-7
+      if (scoreDiff < -3) {
+        if (fgDistance > 50) return 'go'
+        return 'fieldgoal'
+      }
+      // Down 1-3, tied, or up small - take the FG
+      if (scoreDiff <= 7) {
+        return 'fieldgoal'
+      }
+      // Up big - be conservative
+      return 'fieldgoal'
+    }
+
+    // STANDARD Q4: 5+ minutes left (original logic)
     // Down by more than 7: need TDs, skip long FGs
     if (scoreDiff < -7) {
-      if (fgDistance > 45) return 'go'  // Go for TD on long kicks
-      if (distance <= 3) return 'go'    // Go for it on short yardage
-      return 'fieldgoal'                 // Take chip shots
+      if (fgDistance > 45) return 'go'
+      if (distance <= 3) return 'go'
+      return 'fieldgoal'
     }
     // Down by 4-7: FG doesn't help much, but take short ones
     if (scoreDiff >= -7 && scoreDiff < -3) {
@@ -1104,24 +1155,10 @@ function shouldAttemptFieldGoal(gameState) {
     }
     // Down by 1-3: FG ties or takes lead
     if (scoreDiff >= -3 && scoreDiff < 0) {
-      return 'fieldgoal'  // Always take the FG
-    }
-    // Tied: take the lead
-    if (scoreDiff === 0) {
       return 'fieldgoal'
     }
-    // Up by 1-3: extend lead
-    if (scoreDiff > 0 && scoreDiff <= 3) {
-      return 'fieldgoal'
-    }
-    // Up by 4-7: FG makes it 2-score game
-    if (scoreDiff > 3 && scoreDiff <= 7) {
-      return 'fieldgoal'
-    }
-    // Up by 8+: be conservative, take the points
-    if (scoreDiff > 7) {
-      return 'fieldgoal'
-    }
+    // Tied or winning: take the points
+    return 'fieldgoal'
   }
 
   // Q1-Q3: Risk/reward based on distance
