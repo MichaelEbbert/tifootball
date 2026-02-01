@@ -36,128 +36,79 @@ function getRandomFirstName() {
 }
 
 /**
- * Generate random percentages that sum to 100
- * @param {number} count - Number of values to generate
- * @param {number} minEach - Minimum value for each (default 5)
- * @returns {number[]} Array of integers summing to 100
+ * Situational ranges for play tendency generation
+ * Each coach generates random values within these ranges, then normalized to 100%
  */
-function randomPercentages(count, minEach = 5) {
-  // Start with minimum for each
-  const values = Array(count).fill(minEach)
-  let remaining = 100 - (minEach * count)
-
-  // Distribute remaining randomly
-  while (remaining > 0) {
-    const idx = Math.floor(Math.random() * count)
-    const add = Math.min(remaining, Math.floor(Math.random() * 15) + 1)
-    values[idx] += add
-    remaining -= add
-  }
-
-  return values
+const TENDENCY_RANGES = {
+  '1st_10':     { run: [35, 55], short: [20, 35], medium: [12, 25], long: [4, 15] },   // Base
+  '2nd_short':  { run: [40, 60], short: [18, 32], medium: [10, 22], long: [3, 12] },   // Lean run
+  '2nd_medium': { run: [30, 50], short: [22, 37], medium: [14, 27], long: [5, 16] },   // Slight pass
+  '2nd_long':   { run: [25, 45], short: [22, 37], medium: [15, 28], long: [6, 18] },   // Pass heavy
+  '3rd_short':  { run: [45, 65], short: [15, 30], medium: [8, 20], long: [2, 10] },    // Run heavy
+  '3rd_medium': { run: [30, 50], short: [22, 37], medium: [14, 27], long: [5, 16] },   // Slight pass
+  '3rd_long':   { run: [25, 45], short: [22, 37], medium: [15, 28], long: [6, 18] },   // Pass heavy
+  '4th_short':  { run: [45, 65], short: [15, 30], medium: [8, 20], long: [2, 10] },    // Run heavy (like 3rd short)
+  '4th_medium': { run: [30, 50], short: [22, 37], medium: [14, 27], long: [5, 16] },   // Slight pass
+  '4th_long':   { run: [25, 45], short: [22, 37], medium: [15, 28], long: [6, 18] }    // Pass heavy
 }
 
 /**
- * Generate play tendencies with some variance based on situation
+ * Generate play tendencies for a situation
+ * Each value is randomly generated within situational ranges, then normalized to 100%
  */
 function generatePlayTendencies(situation) {
-  // Base tendencies vary by down/distance
-  let runBias, longBias
-  switch (situation) {
-    case '1st_10':
-      runBias = 0.1 + Math.random() * 0.2  // 10-30% extra run tendency
-      longBias = 0
-      break
-    case '2nd_short':
-    case '3rd_short':
-    case '4th_short':
-      runBias = 0.15 + Math.random() * 0.2  // Run-heavy on short
-      longBias = -0.1
-      break
-    case '2nd_medium':
-    case '3rd_medium':
-    case '4th_medium':
-      runBias = -0.05 + Math.random() * 0.1
-      longBias = 0
-      break
-    case '2nd_long':
-    case '3rd_long':
-    case '4th_long':
-      runBias = -0.15 + Math.random() * 0.1  // Pass-heavy on long
-      longBias = 0.1 + Math.random() * 0.1
-      break
-    default:
-      runBias = 0
-      longBias = 0
-  }
+  const ranges = TENDENCY_RANGES[situation] || TENDENCY_RANGES['1st_10']
 
-  // Generate base percentages
-  let [run, short, medium, long] = randomPercentages(4, 5)
+  // Generate random values within each range
+  const run = ranges.run[0] + Math.random() * (ranges.run[1] - ranges.run[0])
+  const short = ranges.short[0] + Math.random() * (ranges.short[1] - ranges.short[0])
+  const medium = ranges.medium[0] + Math.random() * (ranges.medium[1] - ranges.medium[0])
+  const long = ranges.long[0] + Math.random() * (ranges.long[1] - ranges.long[0])
 
-  // Apply biases
-  const runAdjust = Math.round(runBias * 30)
-  const longAdjust = Math.round(longBias * 20)
-
-  run = Math.max(5, Math.min(70, run + runAdjust))
-  long = Math.max(5, Math.min(40, long + longAdjust))
-
-  // Rebalance to 100
+  // Normalize to 100%
   const total = run + short + medium + long
-  const diff = 100 - total
-  if (diff !== 0) {
-    // Adjust medium (usually the most flexible)
-    medium = Math.max(5, medium + diff)
+  return {
+    run_pct: Math.round((run / total) * 100),
+    short_pct: Math.round((short / total) * 100),
+    medium_pct: Math.round((medium / total) * 100),
+    long_pct: Math.round((long / total) * 100)
   }
-
-  // Final normalization
-  const finalTotal = run + short + medium + long
-  if (finalTotal !== 100) {
-    short = 100 - run - medium - long
-  }
-
-  return { run_pct: run, short_pct: short, medium_pct: medium, long_pct: long }
 }
 
 /**
- * Generate red zone tendencies (no long pass)
+ * Red zone ranges (no long pass - compressed field)
+ */
+const RED_ZONE_RANGES = {
+  '1st_10':     { run: [40, 60], short: [25, 40], medium: [15, 30] },   // Base, lean run
+  '2nd_short':  { run: [50, 70], short: [18, 32], medium: [10, 22] },   // Run heavy
+  '2nd_medium': { run: [35, 55], short: [28, 42], medium: [18, 32] },   // Balanced
+  '2nd_long':   { run: [30, 50], short: [30, 45], medium: [20, 35] },   // Pass lean
+  '3rd_short':  { run: [55, 75], short: [15, 28], medium: [8, 18] },    // Very run heavy
+  '3rd_medium': { run: [35, 55], short: [28, 42], medium: [18, 32] },   // Balanced
+  '3rd_long':   { run: [30, 50], short: [30, 45], medium: [20, 35] },   // Pass lean
+  '4th_short':  { run: [55, 75], short: [15, 28], medium: [8, 18] },    // Very run heavy
+  '4th_medium': { run: [35, 55], short: [28, 42], medium: [18, 32] },   // Balanced
+  '4th_long':   { run: [30, 50], short: [30, 45], medium: [20, 35] }    // Pass lean
+}
+
+/**
+ * Generate red zone tendencies (no long pass - compressed field)
  */
 function generateRedZoneTendencies(situation) {
-  let runBias
-  switch (situation) {
-    case '1st_10':
-      runBias = 0.1 + Math.random() * 0.15
-      break
-    case '2nd_short':
-    case '3rd_short':
-    case '4th_short':
-      runBias = 0.2 + Math.random() * 0.2  // Very run-heavy in short yardage
-      break
-    case '2nd_medium':
-    case '3rd_medium':
-    case '4th_medium':
-      runBias = Math.random() * 0.15
-      break
-    case '2nd_long':
-    case '3rd_long':
-    case '4th_long':
-      runBias = -0.1 + Math.random() * 0.1
-      break
-    default:
-      runBias = 0
-  }
+  const ranges = RED_ZONE_RANGES[situation] || RED_ZONE_RANGES['1st_10']
 
-  let [run, short, medium] = randomPercentages(3, 10)
+  // Generate random values within each range
+  const run = ranges.run[0] + Math.random() * (ranges.run[1] - ranges.run[0])
+  const short = ranges.short[0] + Math.random() * (ranges.short[1] - ranges.short[0])
+  const medium = ranges.medium[0] + Math.random() * (ranges.medium[1] - ranges.medium[0])
 
-  const runAdjust = Math.round(runBias * 30)
-  run = Math.max(10, Math.min(70, run + runAdjust))
-
-  // Rebalance
+  // Normalize to 100%
   const total = run + short + medium
-  const diff = 100 - total
-  short = Math.max(10, short + Math.floor(diff / 2))
-  medium = 100 - run - short
-
-  return { run_pct: run, short_pct: short, medium_pct: medium }
+  return {
+    run_pct: Math.round((run / total) * 100),
+    short_pct: Math.round((short / total) * 100),
+    medium_pct: Math.round((medium / total) * 100)
+  }
 }
 
 /**

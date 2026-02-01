@@ -61,15 +61,18 @@ const GAME_CONSTANTS = {
   TWO_PT_SHORT_PASS_SUCCESS: 0.52,  // Quick slant/fade
   TWO_PT_MEDIUM_PASS_SUCCESS: 0.42, // Deeper route, riskier
 
-  // Play Calling
-  PLAY_CALL: {
-    '1st-10': { run: 0.55, pass: 0.45 },
-    '2nd-short': { run: 0.65, pass: 0.35 },
-    '2nd-medium': { run: 0.50, pass: 0.50 },
-    '2nd-long': { run: 0.35, pass: 0.65 },
-    '3rd-short': { run: 0.60, pass: 0.40 },
-    '3rd-medium': { run: 0.30, pass: 0.70 },
-    '3rd-long': { run: 0.15, pass: 0.85 }
+  // Default Play Calling (used when coach tendencies not available)
+  DEFAULT_TENDENCIES: {
+    '1st_10':     { run: 45, short: 28, medium: 18, long: 9 },
+    '2nd_short':  { run: 50, short: 25, medium: 17, long: 8 },
+    '2nd_medium': { run: 40, short: 30, medium: 20, long: 10 },
+    '2nd_long':   { run: 35, short: 30, medium: 22, long: 13 },
+    '3rd_short':  { run: 55, short: 22, medium: 15, long: 8 },
+    '3rd_medium': { run: 40, short: 30, medium: 20, long: 10 },
+    '3rd_long':   { run: 35, short: 30, medium: 22, long: 13 },
+    '4th_short':  { run: 55, short: 22, medium: 15, long: 8 },
+    '4th_medium': { run: 40, short: 30, medium: 20, long: 10 },
+    '4th_long':   { run: 35, short: 30, medium: 22, long: 13 }
   }
 }
 
@@ -325,6 +328,58 @@ export function executePlay(gameState) {
 }
 
 /**
+ * Get the situation key for tendency lookup
+ */
+function getSituationKey(down, distance) {
+  if (down === 1) {
+    return '1st_10'
+  } else if (down === 2) {
+    if (distance <= 3) return '2nd_short'
+    else if (distance <= 7) return '2nd_medium'
+    else return '2nd_long'
+  } else if (down === 3) {
+    if (distance <= 3) return '3rd_short'
+    else if (distance <= 7) return '3rd_medium'
+    else return '3rd_long'
+  } else {
+    // 4th down
+    if (distance <= 3) return '4th_short'
+    else if (distance <= 7) return '4th_medium'
+    else return '4th_long'
+  }
+}
+
+/**
+ * Get coach tendencies for current possession team
+ */
+function getCoachTendencies(gameState, situation) {
+  const team = gameState.possession === 'home' ? gameState.homeTeam : gameState.awayTeam
+
+  // Use coach tendencies if available, otherwise fall back to defaults
+  if (team.tendencies && team.tendencies[situation]) {
+    return team.tendencies[situation]
+  }
+  return GAME_CONSTANTS.DEFAULT_TENDENCIES[situation]
+}
+
+/**
+ * Pick a play type based on tendency percentages
+ */
+function pickPlayFromTendencies(tendencies) {
+  const roll = Math.random() * 100
+
+  if (roll < tendencies.run) {
+    return 'run'
+  } else if (roll < tendencies.run + tendencies.short) {
+    return 'short'
+  } else if (roll < tendencies.run + tendencies.short + tendencies.medium) {
+    return 'medium'
+  } else {
+    return 'long'
+  }
+}
+
+/**
  * Determine what play to call based on down, distance, field position
  */
 function determinePlayType(gameState) {
@@ -356,16 +411,14 @@ function determinePlayType(gameState) {
     return playType
   }
 
-  const { down, simplifiedMode } = gameState
+  const { down, simplifiedMode, distance, yardline } = gameState
 
   // Simplified mode: always run, always go for it on 4th
   if (simplifiedMode) {
     return 'run'
   }
 
-  const { distance, yardline } = gameState
-
-  // 4th down logic
+  // 4th down special logic (punt/FG decisions)
   if (down === 4) {
     // Field goal range (inside opponent 45)
     if (yardline >= 55) {
@@ -373,28 +426,25 @@ function determinePlayType(gameState) {
     }
     // Go for it if short yardage and good field position
     if (distance <= 2 && yardline >= 40) {
-      return Math.random() < 0.50 ? 'run' : 'pass'
+      const situation = getSituationKey(down, distance)
+      const tendencies = getCoachTendencies(gameState, situation)
+      return pickPlayFromTendencies(tendencies)
     }
     // Otherwise punt
     return 'punt'
   }
 
-  // 1st-3rd down: use tendency chart
-  let situation
-  if (down === 1 && distance === 10) {
-    situation = '1st-10'
-  } else if (down === 2) {
-    if (distance <= 3) situation = '2nd-short'
-    else if (distance <= 7) situation = '2nd-medium'
-    else situation = '2nd-long'
-  } else if (down === 3) {
-    if (distance <= 3) situation = '3rd-short'
-    else if (distance <= 7) situation = '3rd-medium'
-    else situation = '3rd-long'
+  // 1st-3rd down: use coach tendencies
+  const situation = getSituationKey(down, distance)
+  const tendencies = getCoachTendencies(gameState, situation)
+
+  // Safety check: avoid long passes deep in own territory
+  if (yardline <= 15 && Math.random() < 0.7) {
+    // 70% chance to override to run when backed up
+    return 'run'
   }
 
-  const tendency = GAME_CONSTANTS.PLAY_CALL[situation]
-  return Math.random() < tendency.run ? 'run' : 'pass'
+  return pickPlayFromTendencies(tendencies)
 }
 
 /**
@@ -945,6 +995,16 @@ function executeFieldGoal(gameState) {
 
     // Add scoring entry
     addScoringEntry(gameState, 'FG', 'kick', fgDistance, null, scoringTeam)
+
+    // Kickoff after FG
+    if (gameState.simplifiedMode) {
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+      gameState.yardline = 35
+      gameState.down = 1
+      gameState.distance = 10
+    } else {
+      kickoff(gameState)
+    }
 
     return {
       type: 'fieldgoal',

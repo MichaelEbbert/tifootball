@@ -425,9 +425,8 @@ This gives slightly above-NFL average, making for exciting games while staying r
 ## Mechanics to Implement
 
 1. Penalties (false start, holding, pass interference, etc.)
-2. Coach AI using play tendency tables
-3. Coach AI using fourth down tendency tables
-4. Coach AI using red zone tendency tables
+2. Coach AI using fourth down tendency tables
+3. Coach AI using red zone tendency tables
 
 ## Mechanics Completed
 
@@ -437,6 +436,41 @@ This gives slightly above-NFL average, making for exciting games while staying r
 - ✅ Safety tracking and display
 - ✅ Punt return touchdowns
 - ✅ Interception return touchdowns (pick-sixes)
+- ✅ Coach AI using play tendency tables (run/short/medium/long per situation)
+
+## Coach Tendency System
+
+Each coach has unique play-calling tendencies stored in the database. Tendencies are per-situation:
+
+**Situations:** 1st_10, 2nd_short, 2nd_medium, 2nd_long, 3rd_short, 3rd_medium, 3rd_long, 4th_short, 4th_medium, 4th_long
+
+**Play Types:** run, short pass, medium pass, long pass (percentages sum to 100)
+
+### Generation Ranges (normalized to 100%)
+
+| Situation | Run | Short | Medium | Long | Notes |
+|-----------|-----|-------|--------|------|-------|
+| 1st_10 | 35-55 | 20-35 | 12-25 | 4-15 | Base |
+| 2nd/3rd short | 45-65 | 15-30 | 8-20 | 2-10 | Run heavy |
+| 2nd/3rd medium | 30-50 | 22-37 | 14-27 | 5-16 | Slight pass |
+| 2nd/3rd long | 25-45 | 22-37 | 15-28 | 6-18 | Pass heavy |
+
+### Usage
+
+Teams passed to `initializeGame()` can include tendencies:
+```javascript
+const team = {
+  id: 1,
+  name: 'Cardinals',
+  tendencies: {
+    '1st_10': { run: 45, short: 28, medium: 18, long: 9 },
+    '2nd_short': { run: 52, short: 24, medium: 16, long: 8 },
+    // ... etc
+  }
+}
+```
+
+If tendencies are not provided, defaults from `GAME_CONSTANTS.DEFAULT_TENDENCIES` are used.
 
 ## Mechanics to Table Long Term
 
