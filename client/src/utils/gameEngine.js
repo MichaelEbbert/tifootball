@@ -21,14 +21,14 @@ import logger from './logger.js'
  */
 const GAME_CONSTANTS = {
   // Passing (by air yards: short 0-9, medium 10-19, long 20+)
-  PASS_COMPLETION: { short: 0.70, medium: 0.58, long: 0.42 },
+  PASS_COMPLETION: { short: 0.73, medium: 0.63, long: 0.44 },
   PASS_INTERCEPTION: { short: 0.02, medium: 0.03, long: 0.06 },
   // Air yards generated via normal distribution with these means
   AIR_YARDS_MEAN: { short: 4, medium: 14 },  // long TBD
   AIR_YARDS_RANGE: { short: [0, 9], medium: [10, 19], long: [20, 50] },
 
   // Sacks (checked before completion/interception)
-  SACK_RATE: { short: 0.04, medium: 0.07, long: 0.10 },  // Mean: 7%
+  SACK_RATE: { short: 0.05, medium: 0.08, long: 0.11 },  // Mean: 7%
   SACK_FUMBLE_RATE: 0.18,      // 18% of sacks cause fumble
   SACK_FUMBLE_LOST: 0.47,      // 47% of sack fumbles lost to defense
 
