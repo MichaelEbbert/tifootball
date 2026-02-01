@@ -45,7 +45,7 @@ export function generateAirYards(passType) {
   const config = {
     short: { mean: 4, stdDev: 2, min: 0, max: 9 },
     medium: { mean: 14, stdDev: 2.5, min: 10, max: 19 },
-    long: { mean: 30, stdDev: 8, min: 20, max: 50 }  // TBD - placeholder for now
+    long: { mean: 33, stdDev: 6, min: 20, max: 50 }
   }
 
   const { mean, stdDev, min, max } = config[passType] || config.short

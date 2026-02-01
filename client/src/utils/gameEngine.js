@@ -64,9 +64,9 @@ const GAME_CONSTANTS = {
 
 /**
  * Play rotation pattern for "game tape" mode
- * 3 runs, 3 short passes, 3 medium passes, repeat
+ * 2 runs, 2 short passes, 2 medium passes, 2 long passes, repeat
  */
-const PLAY_ROTATION = ['run', 'run', 'run', 'short', 'short', 'short', 'medium', 'medium', 'medium']
+const PLAY_ROTATION = ['run', 'run', 'short', 'short', 'medium', 'medium', 'long', 'long']
 
 /**
  * Initialize game state
@@ -510,8 +510,16 @@ function executePass(gameState, forcedType = null) {
   // Generate air yards for this pass attempt
   const airYards = generateAirYards(passType)
 
+  // Calculate interception rate - for long passes, increases with distance
+  let interceptionRate = GAME_CONSTANTS.PASS_INTERCEPTION[passType]
+  if (passType === 'long') {
+    // 6% base for 20-29, +2% for each 10 yards beyond
+    const extraTens = Math.floor((airYards - 20) / 10)  // 0 for 20-29, 1 for 30-39, 2 for 40-49, 3 for 50
+    interceptionRate = 0.06 + (extraTens * 0.02)
+  }
+
   // Check for interception (checked before completion)
-  if (Math.random() < GAME_CONSTANTS.PASS_INTERCEPTION[passType]) {
+  if (Math.random() < interceptionRate) {
     stats.passInterceptions++
     const racResult = runAfterCatch()
     const returnYards = racResult.yards
