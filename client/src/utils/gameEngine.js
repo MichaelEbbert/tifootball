@@ -52,6 +52,15 @@ const GAME_CONSTANTS = {
   XP_SUCCESS: 0.95,
   TWO_PT_SUCCESS: 0.47,
 
+  // 2-Point Conversion Tendencies (defaults, can be overridden by coach)
+  TWO_PT_RUN_PCT: 0.50,        // 50% run, 50% pass
+  TWO_PT_SHORT_PASS_PCT: 0.60, // When passing: 60% short, 40% medium
+
+  // 2-Point Conversion Success Rates by play type
+  TWO_PT_RUN_SUCCESS: 0.50,         // Goal-line run
+  TWO_PT_SHORT_PASS_SUCCESS: 0.52,  // Quick slant/fade
+  TWO_PT_MEDIUM_PASS_SUCCESS: 0.42, // Deeper route, riskier
+
   // Play Calling
   PLAY_CALL: {
     '1st-10': { run: 0.55, pass: 0.45 },
@@ -471,12 +480,16 @@ function executeRun(gameState) {
   if (isTouchdown && gameState.lastXpResult !== undefined) {
     result.xpGood = gameState.lastXpResult
     result.conversionType = gameState.lastConversionType || 'xp'
+    if (gameState.lastTwoPtPlayType) {
+      result.twoPtPlayType = gameState.lastTwoPtPlayType
+    }
     const extraPointValue = gameState.lastConversionType === '2pt'
       ? (gameState.lastXpResult ? '2pt_good' : '2pt_no_good')
       : (gameState.lastXpResult ? 'good' : 'no_good')
     addScoringEntry(gameState, 'TD', 'run', yards, extraPointValue, scoringTeam)
     delete gameState.lastXpResult
     delete gameState.lastConversionType
+    delete gameState.lastTwoPtPlayType
   }
 
   return result
@@ -710,12 +723,16 @@ function executePass(gameState, forcedType = null) {
     if (isTouchdown && gameState.lastXpResult !== undefined) {
       result.xpGood = gameState.lastXpResult
       result.conversionType = gameState.lastConversionType || 'xp'
+      if (gameState.lastTwoPtPlayType) {
+        result.twoPtPlayType = gameState.lastTwoPtPlayType
+      }
       const extraPointValue = gameState.lastConversionType === '2pt'
         ? (gameState.lastXpResult ? '2pt_good' : '2pt_no_good')
         : (gameState.lastXpResult ? 'good' : 'no_good')
       addScoringEntry(gameState, 'TD', 'pass', totalYards, extraPointValue, scoringTeam)
       delete gameState.lastXpResult
       delete gameState.lastConversionType
+      delete gameState.lastTwoPtPlayType
     }
 
     return result
@@ -1008,21 +1025,47 @@ function shouldGoForTwo(gameState) {
 
 /**
  * Attempt 2-point conversion after touchdown
- * @returns {boolean} true if 2PT was successful
+ * Uses coach tendencies to decide run vs pass, short vs medium
+ * @returns {Object} { success: boolean, playType: string }
  */
 function attemptTwoPointConversion(gameState) {
   const stats = getStats(gameState, gameState.possession)
   stats.twoPtAttempted++
 
-  if (Math.random() < GAME_CONSTANTS.TWO_PT_SUCCESS) {
+  // Get coach tendencies (use defaults for now, will pull from coach data later)
+  const runPct = GAME_CONSTANTS.TWO_PT_RUN_PCT
+  const shortPassPct = GAME_CONSTANTS.TWO_PT_SHORT_PASS_PCT
+
+  // Decide play type
+  let playType, successRate
+  if (Math.random() < runPct) {
+    playType = 'run'
+    successRate = GAME_CONSTANTS.TWO_PT_RUN_SUCCESS
+  } else {
+    // Pass - short or medium?
+    if (Math.random() < shortPassPct) {
+      playType = 'short pass'
+      successRate = GAME_CONSTANTS.TWO_PT_SHORT_PASS_SUCCESS
+    } else {
+      playType = 'medium pass'
+      successRate = GAME_CONSTANTS.TWO_PT_MEDIUM_PASS_SUCCESS
+    }
+  }
+
+  const success = Math.random() < successRate
+
+  if (success) {
     stats.twoPtMade++
     gameState.score[gameState.possession] += 2
-    logger.info(`✓ 2-POINT CONVERSION GOOD! Score: ${gameState.score.home}-${gameState.score.away}`)
-    return true
+    logger.info(`✓ 2-POINT CONVERSION (${playType}) GOOD! Score: ${gameState.score.home}-${gameState.score.away}`)
   } else {
-    logger.info(`✗ 2-point conversion FAILED! Score: ${gameState.score.home}-${gameState.score.away}`)
-    return false
+    logger.info(`✗ 2-point conversion (${playType}) FAILED! Score: ${gameState.score.home}-${gameState.score.away}`)
   }
+
+  // Store play type for display
+  gameState.lastTwoPtPlayType = playType
+
+  return success
 }
 
 /**

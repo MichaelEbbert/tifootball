@@ -601,8 +601,9 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
 
     if (animationPhase === 'touchdown') {
       const is2Pt = currentPlay?.conversionType === '2pt'
+      const playTypeText = currentPlay?.twoPtPlayType ? ` (${currentPlay.twoPtPlayType})` : ''
       const conversionText = is2Pt
-        ? (currentPlay?.xpGood ? '2PT Good!' : '2PT No Good')
+        ? (currentPlay?.xpGood ? `2PT${playTypeText} Good!` : `2PT${playTypeText} No Good`)
         : (currentPlay?.xpGood ? 'XP Good!' : 'XP No Good')
       return (
         <div className="play-result touchdown-display">
