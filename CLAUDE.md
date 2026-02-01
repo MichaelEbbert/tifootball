@@ -424,14 +424,19 @@ This gives slightly above-NFL average, making for exciting games while staying r
 
 ## Mechanics to Implement
 
-1. Kickoff returns with TD possibility (currently just touchback or start at yard 5 + RAC)
-2. Punt return touchdowns
-3. 2-point conversion attempts (stats tracked but always kicks XP)
-4. Interception return touchdowns
-5. Penalties (false start, holding, pass interference, etc.)
-6. Coach AI using play tendency tables
-7. Coach AI using fourth down tendency tables
-8. Coach AI using red zone tendency tables
+1. Punt return touchdowns
+2. Interception return touchdowns
+3. Penalties (false start, holding, pass interference, etc.)
+4. Coach AI using play tendency tables
+5. Coach AI using fourth down tendency tables
+6. Coach AI using red zone tendency tables
+
+## Mechanics Completed
+
+- ✅ Kickoff returns with 1-40 gauntlet algorithm, TD possibility, starting 5-8 yard line
+- ✅ 2-point conversions with analytics-based decisions and coach tendencies (run/pass/short)
+- ✅ Coin toss for kickoff receiver
+- ✅ Safety tracking and display
 
 ## Mechanics to Table Long Term
 
