@@ -30,6 +30,7 @@ const args = process.argv.slice(2)
 let numGames = 100
 let fourthDownTest = false
 let rotationMode = false
+let fullMode = false  // Use full game mode (with kickoffs/punts)
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--games' && args[i + 1]) {
@@ -40,6 +41,9 @@ for (let i = 0; i < args.length; i++) {
   }
   if (args[i] === '--rotation') {
     rotationMode = true
+  }
+  if (args[i] === '--full') {
+    fullMode = true
   }
 }
 
@@ -109,10 +113,17 @@ const stats = {
   totalSacks: 0,
   totalKickReturns: 0,
   totalKickReturnYards: 0,
+  totalPuntReturnYards: 0,
+  totalIntReturnYards: 0,
   totalTwoPtAttempts: 0,
   totalTwoPtMade: 0,
   totalFirstDowns: 0,
   totalTouchdowns: 0,
+  totalRushingTDs: 0,
+  totalPassingTDs: 0,
+  totalKickReturnTDs: 0,
+  totalPuntReturnTDs: 0,
+  totalIntReturnTDs: 0,
   totalFumbles: 0,
   totalSafeties: 0,
   homeWins: 0,
@@ -126,13 +137,15 @@ const stats = {
 
 console.log(`\n🏈 Silent Simulator`)
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-console.log(`Running ${numGames} games...${rotationMode ? ' (rotation mode)' : ''}\n`)
+const modeFlags = [rotationMode && 'rotation', fullMode && 'full'].filter(Boolean).join(', ')
+console.log(`Running ${numGames} games...${modeFlags ? ` (${modeFlags})` : ''}\n`)
 
 const startTime = Date.now()
 
 // Run simulations
 for (let game = 0; game < numGames; game++) {
-  const gameState = initializeGame(homeTeam, awayTeam, true, rotationMode) // simplified mode, optional rotation
+  const simplifiedMode = !fullMode
+  const gameState = initializeGame(homeTeam, awayTeam, simplifiedMode, rotationMode)
 
   // Run until game is over
   while (!isGameOver(gameState)) {
@@ -165,10 +178,21 @@ for (let game = 0; game < numGames; game++) {
   // Count touchdowns and safeties from scoring log
   if (gameState.scoringLog) {
     for (const entry of gameState.scoringLog) {
-      if (entry.score_type === 'TD') stats.totalTouchdowns++
+      if (entry.score_type === 'TD') {
+        stats.totalTouchdowns++
+        if (entry.play_type === 'run') stats.totalRushingTDs++
+        else if (entry.play_type === 'pass') stats.totalPassingTDs++
+        else if (entry.play_type === 'kick_return') stats.totalKickReturnTDs++
+        else if (entry.play_type === 'punt_return') stats.totalPuntReturnTDs++
+        else if (entry.play_type === 'int_return') stats.totalIntReturnTDs++
+      }
       if (entry.score_type === 'SAFETY') stats.totalSafeties++
     }
   }
+
+  // Track return yardage
+  stats.totalPuntReturnYards += gameState.homeStats.puntReturnYards + gameState.awayStats.puntReturnYards
+  stats.totalIntReturnYards += gameState.homeStats.interceptionReturnYards + gameState.awayStats.interceptionReturnYards
 
   // Win/loss tracking
   if (gameState.score.home > gameState.score.away) {
@@ -220,7 +244,7 @@ console.log(`━━━━━━━━━━━━━━━━━━━━━━�
 console.log(`\n🏆 Scoring:`)
 console.log(`  Avg points/game (total):    ${avgPointsPerGame.toFixed(1)}`)
 console.log(`  Avg points/team/game:       ${avgPointsPerTeam.toFixed(1)}`)
-console.log(`  Avg touchdowns/game:        ${avgTDsPerGame.toFixed(2)}`)
+console.log(`  Avg touchdowns/game:        ${avgTDsPerGame.toFixed(2)} (${stats.totalRushingTDs} rush, ${stats.totalPassingTDs} pass, ${stats.totalKickReturnTDs + stats.totalPuntReturnTDs + stats.totalIntReturnTDs} return)`)
 console.log(`  Total safeties:             ${stats.totalSafeties} (${(stats.totalSafeties / stats.totalGames).toFixed(2)}/game)`)
 console.log(`  High score (single team):   ${stats.highScore}`)
 console.log(`  Low score (single team):    ${stats.lowScore}`)
@@ -244,12 +268,17 @@ console.log(`  Avg passing yards/game:     ${avgPassYardsPerGame.toFixed(1)}`)
 console.log(`  Interception rate:          ${interceptionRate}%`)
 console.log(`  Sack rate:                  ${sackRate}%`)
 
-if (stats.totalKickReturns > 0) {
-  const avgKickReturnYards = stats.totalKickReturnYards / stats.totalKickReturns
-  console.log(`\n⚡ Kick Returns:`)
-  console.log(`  Total returns:              ${stats.totalKickReturns}`)
-  console.log(`  Avg yards/return:           ${avgKickReturnYards.toFixed(1)}`)
-  console.log(`  Avg returns/game:           ${(stats.totalKickReturns / stats.totalGames).toFixed(2)}`)
+if (stats.totalKickReturns > 0 || stats.totalPuntReturnYards > 0 || stats.totalIntReturnYards > 0) {
+  console.log(`\n⚡ Returns:`)
+  if (stats.totalKickReturns > 0) {
+    const avgKickReturnYards = stats.totalKickReturnYards / stats.totalKickReturns
+    console.log(`  Kick returns:               ${stats.totalKickReturns} (${avgKickReturnYards.toFixed(1)} avg)`)
+    console.log(`  Kick return TDs:            ${stats.totalKickReturnTDs}`)
+  }
+  console.log(`  Punt return yards:          ${stats.totalPuntReturnYards} (${(stats.totalPuntReturnYards / stats.totalGames).toFixed(1)}/game)`)
+  console.log(`  Punt return TDs:            ${stats.totalPuntReturnTDs}`)
+  console.log(`  INT return yards:           ${stats.totalIntReturnYards} (${(stats.totalIntReturnYards / stats.totalGames).toFixed(1)}/game)`)
+  console.log(`  INT return TDs (pick-6):    ${stats.totalIntReturnTDs}`)
 }
 
 if (stats.totalTwoPtAttempts > 0) {

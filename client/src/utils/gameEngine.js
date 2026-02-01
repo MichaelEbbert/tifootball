@@ -1225,8 +1225,30 @@ function kickoff(gameState) {
     // Check for kick return touchdown
     if (gameState.yardline >= 100) {
       gameState.yardline = 100
-      // TD will be handled by next play or we need to score it here
-      // For now, just cap at 100 - the yardline check will handle it
+      gameState.score[receiver] += 6
+      logger.info(`🏈 KICK RETURN TOUCHDOWN! ${receiver} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
+
+      // Attempt XP/2PT
+      if (shouldGoForTwo(gameState)) {
+        const twoPtGood = attemptTwoPointConversion(gameState)
+        gameState.lastKickReturnXpResult = twoPtGood
+        gameState.lastKickReturnConversionType = '2pt'
+      } else {
+        const xpGood = attemptExtraPoint(gameState)
+        gameState.lastKickReturnXpResult = xpGood
+        gameState.lastKickReturnConversionType = 'xp'
+      }
+
+      // Add scoring entry
+      const extraPointValue = gameState.lastKickReturnConversionType === '2pt'
+        ? (gameState.lastKickReturnXpResult ? '2pt_good' : '2pt_no_good')
+        : (gameState.lastKickReturnXpResult ? 'good' : 'no_good')
+      addScoringEntry(gameState, 'TD', 'kick_return', returnYards, extraPointValue, receiver)
+
+      // Kickoff again (other team kicks to the team that just scored)
+      // Need to flip possession so kickoff gives ball back correctly
+      gameState.possession = receiver === 'home' ? 'away' : 'home'
+      kickoff(gameState)
     }
   }
 }
