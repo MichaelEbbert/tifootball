@@ -1,5 +1,65 @@
 # TI Football Game - 1979 BASIC Simulation
 
+---
+
+## IMPORTANT: Season Setup Checklist
+
+**After receiving the 272-game schedule JSON file:**
+
+1. **Reset the database** (schema changed, need fresh start):
+   ```bash
+   cd server
+   rm db/tifootball.db
+   npm run seed
+   ```
+
+2. **Import the schedule** via API:
+   ```bash
+   # Using curl (or Postman, etc.)
+   curl -X POST http://localhost:3002/api/schedule/import \
+     -H "Content-Type: application/json" \
+     -d @schedule.json
+   ```
+
+   Expected format:
+   ```json
+   {
+     "games": [
+       { "game_number": 1, "week": 1, "game_date": "Sep 5", "game_day": "Thursday", "away_team_id": 12, "home_team_id": 8 },
+       { "game_number": 2, "week": 1, "game_date": "Sep 7", "game_day": "Sunday", "away_team_id": 3, "home_team_id": 15 },
+       ...
+     ]
+   }
+   ```
+
+3. **Start the servers**:
+   ```bash
+   # Terminal 1 - Backend
+   cd server && npm start
+
+   # Terminal 2 - Frontend
+   cd client && npm run dev
+   ```
+
+4. **Play games** - Each completed game automatically:
+   - Saves full box score stats (40+ fields per team)
+   - Saves scoring log for newspaper-style replay
+   - Updates schedule (marks game as simulated)
+   - Updates standings (W/L/T calculated from games table)
+
+5. **Browse results** - Click "View Schedule & Results" to:
+   - See all 272 games by week
+   - Click completed games to view full box scores
+   - Review scoring summaries
+
+**Potential bugs to watch for during first games:**
+- Stats not saving correctly (check browser console for API errors)
+- Scoring log entries missing team_id
+- Schedule not marking as complete after game
+- Standings not updating (refresh page after game)
+
+---
+
 ## Original Game Overview
 This project simulates a football game originally created in 1979 on a TI-99/4a computer in BASIC by a 10-year-old developer.
 
@@ -218,9 +278,28 @@ tifootball/
 **Teams:**
 - `GET /api/teams` - List all teams with coach names
 - `GET /api/teams/:id` - Get specific team with coach details
+- `GET /api/teams/:id/games` - Get all games for a team
+- `GET /api/teams/:id/stats` - Get aggregated season stats for a team
 
 **Coaches:**
 - `POST /api/coaches` - Create new coach with random surname for a team
+
+**Games:**
+- `GET /api/games` - List recent games
+- `GET /api/games/:id` - Get full game detail (box score, scoring log)
+- `GET /api/games/:id/scoring` - Get scoring log for a game
+- `POST /api/games` - Save a completed game (stats, scoring log, links to schedule)
+
+**Schedule:**
+- `GET /api/schedule/next` - Get next unplayed game
+- `GET /api/schedule/games` - Get full schedule with results
+- `POST /api/schedule/import` - Bulk import schedule (272 games)
+
+**Standings:**
+- `GET /api/standings` - Get standings with W/L/T calculated from games
+
+**Season Management:**
+- `POST /api/season/reset` - Clear all games/stats, reset schedule to unplayed
 
 **Utility:**
 - `GET /api/surnames/random` - Get a random surname from the database
@@ -439,6 +518,10 @@ This gives slightly above-NFL average, making for exciting games while staying r
 - ✅ Red zone pass restrictions (no long inside 30, no medium inside 15)
 - ✅ Red zone aggression per coach (-10 to +10, positive = more passes)
 - ✅ Q4 4th down decisions based on clock and score (desperation mode, clock killing, late game adjustments)
+- ✅ Game persistence (full stats saved to database after each game)
+- ✅ Schedule tracking (games marked complete, linked to results)
+- ✅ Standings calculated from actual game results (W/L/T, PF/PA)
+- ✅ Game browser UI (view schedule, box scores, scoring summaries)
 
 ## Coach Tendency System
 
@@ -487,14 +570,12 @@ If tendencies are not provided, defaults from `GAME_CONSTANTS.DEFAULT_TENDENCIES
 - Playoffs / Super Bowl bracket
 - Realistic NFL schedule (6 division games, weighted conference matchups)
 - Standings tiebreakers (head-to-head, division record, strength of schedule)
-- Save/load seasons to database
 - Historical records (franchise records, league records)
 
 ### UI/Frontend
 - Live game display polish
 - Play-by-play feed with scrolling history
-- Box scores (full game stats breakdown)
-- Season mode in the browser (not just simulator)
+- Team season stats page (aggregated from all games)
 
 ### Game Depth
 - Home field advantage
