@@ -424,12 +424,10 @@ This gives slightly above-NFL average, making for exciting games while staying r
 
 ## Mechanics to Implement
 
-1. Punt return touchdowns
-2. Interception return touchdowns
-3. Penalties (false start, holding, pass interference, etc.)
-4. Coach AI using play tendency tables
-5. Coach AI using fourth down tendency tables
-6. Coach AI using red zone tendency tables
+1. Penalties (false start, holding, pass interference, etc.)
+2. Coach AI using play tendency tables
+3. Coach AI using fourth down tendency tables
+4. Coach AI using red zone tendency tables
 
 ## Mechanics Completed
 
@@ -437,6 +435,8 @@ This gives slightly above-NFL average, making for exciting games while staying r
 - ✅ 2-point conversions with analytics-based decisions and coach tendencies (run/pass/short)
 - ✅ Coin toss for kickoff receiver
 - ✅ Safety tracking and display
+- ✅ Punt return touchdowns
+- ✅ Interception return touchdowns (pick-sixes)
 
 ## Mechanics to Table Long Term
 

@@ -599,11 +599,69 @@ function executePass(gameState, forcedType = null) {
   // Check for interception (checked before completion)
   if (Math.random() < interceptionRate) {
     stats.passInterceptions++
-    const racResult = runAfterCatch()
+
+    // Calculate yards to goal for potential pick-six
+    // Defense catches at (yardline + airYards) and needs to reach offense's end zone (0)
+    const interceptionSpot = gameState.yardline + airYards
+    const yardsToGoal = interceptionSpot  // Distance back to offense's end zone
+
+    const racResult = runAfterCatch({ yardsToGoal })
     const returnYards = racResult.yards
+
     // Defense gets the return yards
-    const defenseStats = getStats(gameState, gameState.possession === 'home' ? 'away' : 'home')
+    const defenseTeam = gameState.possession === 'home' ? 'away' : 'home'
+    const defenseStats = getStats(gameState, defenseTeam)
     defenseStats.interceptionReturnYards += returnYards
+
+    // Check for pick-six (interception return TD)
+    if (returnYards >= yardsToGoal) {
+      gameState.possession = defenseTeam
+      gameState.score[defenseTeam] += 6
+      logger.info(`🏈 PICK-SIX! ${defenseTeam} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
+
+      // Attempt XP/2PT
+      if (shouldGoForTwo(gameState)) {
+        const twoPtGood = attemptTwoPointConversion(gameState)
+        gameState.lastXpResult = twoPtGood
+        gameState.lastConversionType = '2pt'
+      } else {
+        const xpGood = attemptExtraPoint(gameState)
+        gameState.lastXpResult = xpGood
+        gameState.lastConversionType = 'xp'
+      }
+
+      // Add scoring entry
+      const extraPointValue = gameState.lastConversionType === '2pt'
+        ? (gameState.lastXpResult ? '2pt_good' : '2pt_no_good')
+        : (gameState.lastXpResult ? 'good' : 'no_good')
+      addScoringEntry(gameState, 'TD', 'int_return', returnYards, extraPointValue, defenseTeam)
+
+      // Kickoff after TD
+      if (gameState.simplifiedMode) {
+        gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+        gameState.yardline = 35
+        gameState.down = 1
+        gameState.distance = 10
+      } else {
+        kickoff(gameState)
+      }
+
+      return {
+        type: 'pass',
+        passType: passType,
+        yards: 0,
+        airYards: airYards,
+        interception: true,
+        turnover: true,
+        returnYards: returnYards,
+        touchdown: true,
+        xpGood: gameState.lastXpResult,
+        conversionType: gameState.lastConversionType,
+        twoPtPlayType: gameState.lastTwoPtPlayType,
+        description: `${passType.charAt(0).toUpperCase() + passType.slice(1)} pass intercepted! Returned ${returnYards} yards for a TOUCHDOWN!`
+      }
+    }
+
     logger.info(`INTERCEPTION! ${gameState.possession} pass picked off at ${airYards} air yards, returned ${returnYards} yards`)
 
     // Change possession at the interception spot
@@ -797,11 +855,59 @@ function executePunt(gameState) {
   }
 
   // Return
-  const yardsToGoal = landSpot  // Returner's distance to their own goal (which is opponent's end zone)
-  const racResult = runAfterCatch({ yardsToGoal: 100 - landSpot })  // Distance to scoring end zone
+  const returningTeam = gameState.possession === 'home' ? 'away' : 'home'
+  const yardsToGoal = 100 - landSpot  // Distance to scoring end zone
+  const racResult = runAfterCatch({ yardsToGoal })
   const returnYards = racResult.yards
-  const defenseStats = getStats(gameState, gameState.possession === 'home' ? 'away' : 'home')
-  defenseStats.puntReturnYards += returnYards
+  const returnerStats = getStats(gameState, returningTeam)
+  returnerStats.puntReturnYards += returnYards
+
+  // Check for punt return touchdown
+  if (returnYards >= yardsToGoal) {
+    // TOUCHDOWN on punt return!
+    gameState.possession = returningTeam
+    gameState.score[returningTeam] += 6
+    logger.info(`🏈 PUNT RETURN TOUCHDOWN! ${returningTeam} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
+
+    // Attempt XP/2PT
+    if (shouldGoForTwo(gameState)) {
+      const twoPtGood = attemptTwoPointConversion(gameState)
+      gameState.lastXpResult = twoPtGood
+      gameState.lastConversionType = '2pt'
+    } else {
+      const xpGood = attemptExtraPoint(gameState)
+      gameState.lastXpResult = xpGood
+      gameState.lastConversionType = 'xp'
+    }
+
+    // Add scoring entry
+    const extraPointValue = gameState.lastConversionType === '2pt'
+      ? (gameState.lastXpResult ? '2pt_good' : '2pt_no_good')
+      : (gameState.lastXpResult ? 'good' : 'no_good')
+    addScoringEntry(gameState, 'TD', 'punt_return', returnYards, extraPointValue, returningTeam)
+
+    // Kickoff after TD
+    if (gameState.simplifiedMode) {
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+      gameState.yardline = 35
+      gameState.down = 1
+      gameState.distance = 10
+    } else {
+      kickoff(gameState)
+    }
+
+    return {
+      type: 'punt',
+      yards: puntAirYards,
+      netYards: 0,
+      returnYards: returnYards,
+      touchdown: true,
+      xpGood: gameState.lastXpResult,
+      conversionType: gameState.lastConversionType,
+      twoPtPlayType: gameState.lastTwoPtPlayType,
+      description: `Punt ${puntAirYards} yards, returned ${returnYards} yards for a TOUCHDOWN!`
+    }
+  }
 
   changePossession(gameState, netPuntYards - returnYards)
 
