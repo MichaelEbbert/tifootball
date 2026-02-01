@@ -102,11 +102,12 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
   const coinToss = Math.random() < 0.5 ? 'home' : 'away'
   const firstHalfReceiver = coinToss
   const secondHalfReceiver = coinToss === 'home' ? 'away' : 'home'
+  const firstHalfKicker = secondHalfReceiver  // Opposite of receiver
 
   logger.info(`Game initialized: ${awayTeam.name} @ ${homeTeam.name}${simplifiedMode ? ' (Simplified Mode)' : ''}${rotationMode ? ' (Rotation Mode)' : ''}`)
   logger.info(`Coin toss: ${coinToss === 'home' ? homeTeam.name : awayTeam.name} wins, receives first`)
 
-  return {
+  const gameState = {
     // Game mode
     simplifiedMode,
     rotationMode,
@@ -115,7 +116,7 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
     // Teams
     homeTeam,
     awayTeam,
-    possession: firstHalfReceiver,
+    possession: firstHalfKicker,  // Set to kicker so kickoff() flips to receiver
     secondHalfReceiver,  // Team that receives at halftime
 
     // Score
@@ -131,7 +132,7 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
     overtimeFirstPossession: true,  // Is this the first OT possession?
     down: 1,
     distance: 10,
-    yardline: 35, // Starting field position (own 35)
+    yardline: 35, // Will be set by kickoff
     ballOn: 'away', // Which team's side of field ('home' or 'away')
 
     // Play tracking
@@ -227,6 +228,18 @@ export function initializeGame(homeTeam, awayTeam, simplifiedMode = false, rotat
       safetiesScored: 0
     }
   }
+
+  // Set up for opening kickoff (unless simplified mode)
+  if (simplifiedMode) {
+    // Simplified mode: receiver starts at own 35
+    gameState.possession = firstHalfReceiver
+    gameState.yardline = 35
+  } else {
+    // Full mode: flag for kickoff on first executePlay call
+    gameState.awaitingKickoff = true
+  }
+
+  return gameState
 }
 
 /**
@@ -280,6 +293,13 @@ function addScoringEntry(gameState, scoreType, playType, yards, extraPoint, scor
  * Execute a single play
  */
 export function executePlay(gameState) {
+  // Handle opening kickoff if awaiting
+  if (gameState.awaitingKickoff) {
+    delete gameState.awaitingKickoff
+    const kickoffResult = executeOpeningKickoff(gameState)
+    return kickoffResult
+  }
+
   const playTime = generatePlayTime()
   gameState.playNumber++
 
@@ -292,6 +312,12 @@ export function executePlay(gameState) {
   // Determine play type
   const playType = determinePlayType(gameState)
   logger.debug(`  Play type: ${playType}`)
+
+  // Track 4th down attempts only when going for it (not punts/FGs)
+  if (gameState.down === 4 && playType !== 'punt' && playType !== 'fieldgoal') {
+    const stats = getStats(gameState, gameState.possession)
+    stats.fourthDownAttempts++
+  }
 
   let playResult
   switch (playType) {
@@ -789,7 +815,7 @@ function executePass(gameState, forcedType = null) {
         gameState.down = 1
         gameState.distance = 10
       } else {
-        kickoff(gameState)
+        gameState.awaitingKickoff = true
       }
 
       return {
@@ -1039,7 +1065,7 @@ function executePunt(gameState) {
       gameState.down = 1
       gameState.distance = 10
     } else {
-      kickoff(gameState)
+      gameState.awaitingKickoff = true
     }
 
     return {
@@ -1220,7 +1246,7 @@ function executeFieldGoal(gameState) {
       gameState.down = 1
       gameState.distance = 10
     } else {
-      kickoff(gameState)
+      gameState.awaitingKickoff = true
     }
 
     return {
@@ -1341,7 +1367,7 @@ function updateDownAndDistance(gameState, yards) {
       gameState.down = 1
       gameState.distance = 10
     } else {
-      kickoff(gameState)
+      gameState.awaitingKickoff = true
     }
     return
   }
@@ -1365,7 +1391,7 @@ function updateDownAndDistance(gameState, yards) {
   } else {
     gameState.down++
     if (gameState.down === 3) stats.thirdDownAttempts++
-    if (gameState.down === 4) stats.fourthDownAttempts++
+    // Note: fourthDownAttempts is tracked in executePlay when going for it (not punts/FGs)
 
     if (gameState.down > 4) {
       // Turnover on downs - other team takes over at this spot
@@ -1475,6 +1501,95 @@ function attemptExtraPoint(gameState) {
 }
 
 /**
+ * Execute opening kickoff and return a displayable result
+ * Used for game start so the kickoff can be shown in the play-by-play
+ */
+function executeOpeningKickoff(gameState) {
+  const kicker = gameState.possession
+  const receiver = kicker === 'home' ? 'away' : 'home'
+  const receiverStats = getStats(gameState, receiver)
+  const receiverTeam = receiver === 'home' ? gameState.homeTeam : gameState.awayTeam
+
+  // Handle overtime possession marking if needed
+  if (gameState.overtimeReceiverToMark) {
+    gameState.overtimePossessions[gameState.overtimeReceiverToMark] = true
+    delete gameState.overtimeReceiverToMark
+  }
+
+  if (Math.random() < GAME_CONSTANTS.TOUCHBACK_PCT) {
+    gameState.possession = receiver
+    gameState.yardline = 30
+    gameState.down = 1
+    gameState.distance = 10
+    markOvertimePossession(gameState)
+    return {
+      type: 'kickoff',
+      touchback: true,
+      returnYards: 0,
+      endYardline: 30,
+      description: `${receiverTeam.name} touchback, ball at the 30`
+    }
+  }
+
+  // Starting position: evenly distributed 5-8 yard line
+  const startYardline = 5 + Math.floor(Math.random() * 4)
+  const yardsToGoal = 100 - startYardline
+
+  receiverStats.kickReturnAttempts++
+  const returnResult = kickoffReturn({ yardsToGoal })
+  const returnYards = returnResult.yards
+  receiverStats.kickReturnYards += returnYards
+
+  gameState.possession = receiver
+  gameState.yardline = startYardline + returnYards
+  gameState.down = 1
+  gameState.distance = 10
+
+  // Check for kick return touchdown
+  if (gameState.yardline >= 100) {
+    gameState.yardline = 100
+    gameState.score[receiver] += 6
+    receiverStats.kickReturnTouchdowns = (receiverStats.kickReturnTouchdowns || 0) + 1
+    logger.info(`🏈 KICK RETURN TOUCHDOWN! ${receiver} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
+
+    // Attempt XP/2PT
+    let xpGood, conversionType
+    if (shouldGoForTwo(gameState)) {
+      xpGood = attemptTwoPointConversion(gameState)
+      conversionType = '2pt'
+    } else {
+      xpGood = attemptExtraPoint(gameState)
+      conversionType = 'xp'
+    }
+
+    const extraPointValue = conversionType === '2pt'
+      ? (xpGood ? '2pt_good' : '2pt_no_good')
+      : (xpGood ? 'good' : 'no_good')
+    addScoringEntry(gameState, 'TD', 'kick_return', returnYards, extraPointValue, receiver)
+
+    // Set up for next kickoff (scoring team kicks)
+    gameState.possession = receiver === 'home' ? 'away' : 'home'
+    gameState.awaitingKickoff = true
+
+    return {
+      type: 'kickoff',
+      touchdown: true,
+      returnYards: returnYards,
+      xpGood: xpGood,
+      conversionType: conversionType,
+      description: `${receiverTeam.name} kickoff return ${returnYards} yards for a TOUCHDOWN!`
+    }
+  }
+
+  return {
+    type: 'kickoff',
+    returnYards: returnYards,
+    endYardline: gameState.yardline,
+    description: `${receiverTeam.name} kickoff return ${returnYards} yards to the ${gameState.yardline}`
+  }
+}
+
+/**
  * Execute kickoff
  * Starting position: 5-8 yard line (evenly distributed)
  * Return algorithm: 1-4 vs 1-40 gauntlet, then run mode
@@ -1535,7 +1650,7 @@ function kickoff(gameState) {
       // Kickoff again (other team kicks to the team that just scored)
       // Need to flip possession so kickoff gives ball back correctly
       gameState.possession = receiver === 'home' ? 'away' : 'home'
-      kickoff(gameState)
+      gameState.awaitingKickoff = true
     }
   }
 }
@@ -1579,7 +1694,7 @@ function advanceQuarter(gameState) {
     } else {
       // Set possession to kicking team so kickoff gives ball to receiver
       gameState.possession = gameState.secondHalfReceiver === 'home' ? 'away' : 'home'
-      kickoff(gameState)
+      gameState.awaitingKickoff = true
     }
   }
 }
@@ -1611,9 +1726,9 @@ function startOvertime(gameState) {
     gameState.overtimePossessions[otReceiver] = true
   } else {
     gameState.possession = otKicker
-    kickoff(gameState)
-    // Mark the receiving team as having possession
-    gameState.overtimePossessions[otReceiver] = true
+    gameState.awaitingKickoff = true
+    // Mark the receiving team as having possession after kickoff executes
+    gameState.overtimeReceiverToMark = otReceiver
   }
 }
 

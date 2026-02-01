@@ -170,9 +170,9 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
       setGameState(savedGameState)
       logger.info('Resumed saved game')
     } else {
-      const initialState = initializeGame(game.homeTeam, game.awayTeam, true) // true = simplified mode
+      const initialState = initializeGame(game.homeTeam, game.awayTeam, false)
       setGameState(initialState)
-      logger.info('Game started - Simplified mode: Runs only, no kicks, always go on 4th down')
+      logger.info('Game started')
     }
 
     // Start simulation after brief delay

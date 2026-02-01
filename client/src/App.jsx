@@ -55,20 +55,22 @@ function App() {
   function handleBeginGame() {
     logger.info(`Starting Game ${nextGame.game_number}`)
 
-    // Set up game with team info
+    // Set up game with team info and coach tendencies
     setCurrentGame({
       gameNumber: nextGame.game_number,
       homeTeam: {
         id: nextGame.home_team_id,
         city: nextGame.home_city,
         name: nextGame.home_name,
-        abbreviation: nextGame.home_abbr
+        abbreviation: nextGame.home_abbr,
+        tendencies: nextGame.home_tendencies
       },
       awayTeam: {
         id: nextGame.away_team_id,
         city: nextGame.away_city,
         name: nextGame.away_name,
-        abbreviation: nextGame.away_abbr
+        abbreviation: nextGame.away_abbr,
+        tendencies: nextGame.away_tendencies
       }
     })
 

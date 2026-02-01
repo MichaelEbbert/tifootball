@@ -100,7 +100,7 @@ const args = process.argv.slice(2)
 let numGames = 100
 let fourthDownTest = false
 let rotationMode = false
-let fullMode = false  // Use full game mode (with kickoffs/punts)
+let fullMode = true  // Use full game mode (with kickoffs/punts/FGs) - default on
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--games' && args[i + 1]) {

@@ -9,9 +9,7 @@ build/
 client/dist/
 
 # Database
-*.db
 *.db-journal
-server/db/*.db
 
 # Environment
 .env

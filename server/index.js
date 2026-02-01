@@ -230,6 +230,27 @@ function createCoachForTeam(teamId) {
   return { id: result.lastInsertRowid, firstName, lastName, teamId }
 }
 
+// Get coach tendencies for a team
+function getTeamTendencies(teamId) {
+  const rows = queryAll(`
+    SELECT t.situation, t.run_pct, t.short_pct, t.medium_pct, t.long_pct
+    FROM coach_play_tendencies t
+    JOIN coaches c ON t.coach_id = c.id
+    WHERE c.team_id = ?
+  `, [teamId])
+
+  const tendencies = {}
+  rows.forEach(row => {
+    tendencies[row.situation] = {
+      run: row.run_pct,
+      short: row.short_pct,
+      medium: row.medium_pct,
+      long: row.long_pct
+    }
+  })
+  return tendencies
+}
+
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'TI Football API is running' })
@@ -294,6 +315,10 @@ app.get('/api/schedule/next', (req, res) => {
   if (!nextGame) {
     return res.status(404).json({ error: 'No unplayed games found' })
   }
+
+  // Include coach tendencies for both teams
+  nextGame.home_tendencies = getTeamTendencies(nextGame.home_team_id)
+  nextGame.away_tendencies = getTeamTendencies(nextGame.away_team_id)
 
   res.json(nextGame)
 })
