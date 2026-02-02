@@ -471,6 +471,8 @@ const stats = {
   totalSafeties: 0,
   totalFgAttempts: 0,
   totalFgMade: 0,
+  total3rdDownAttempts: 0,
+  total3rdDownConversions: 0,
   homeWins: 0,
   awayWins: 0,
   ties: 0,
@@ -554,6 +556,10 @@ for (let game = 0; game < numGames; game++) {
   // Track field goals
   stats.totalFgAttempts += (gameState.homeStats.fgAttempted || 0) + (gameState.awayStats.fgAttempted || 0)
   stats.totalFgMade += (gameState.homeStats.fgMade || 0) + (gameState.awayStats.fgMade || 0)
+
+  // Track 3rd down conversions
+  stats.total3rdDownAttempts += (gameState.homeStats.thirdDownAttempts || 0) + (gameState.awayStats.thirdDownAttempts || 0)
+  stats.total3rdDownConversions += (gameState.homeStats.thirdDownConversions || 0) + (gameState.awayStats.thirdDownConversions || 0)
 
   // Win/loss tracking
   if (gameState.score.home > gameState.score.away) {
@@ -661,6 +667,8 @@ console.log(`\n📈 Game Flow:`)
 console.log(`  Avg plays/game:             ${avgPlaysPerGame.toFixed(1)}`)
 console.log(`  Avg first downs/game:       ${avgFirstDownsPerGame.toFixed(1)}`)
 console.log(`  Avg turnovers/game:         ${avgFumblesPerGame.toFixed(2)}`)
+const thirdDownRate = stats.total3rdDownAttempts > 0 ? (stats.total3rdDownConversions / stats.total3rdDownAttempts * 100).toFixed(1) : '0.0'
+console.log(`  3rd down conversion:        ${thirdDownRate}% (${stats.total3rdDownConversions}/${stats.total3rdDownAttempts})`)
 
 console.log(`\n⚖️  Balance:`)
 console.log(`  Home wins:                  ${stats.homeWins} (${(stats.homeWins / stats.totalGames * 100).toFixed(1)}%)`)

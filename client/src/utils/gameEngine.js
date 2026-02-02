@@ -1364,6 +1364,9 @@ function executeSafety(gameState, playType) {
 function updateDownAndDistance(gameState, yards) {
   const stats = getStats(gameState, gameState.possession)
 
+  // Track 3rd down attempt at start (before any changes)
+  if (gameState.down === 3) stats.thirdDownAttempts++
+
   // Update field position
   gameState.yardline += yards
 
@@ -1416,7 +1419,7 @@ function updateDownAndDistance(gameState, yards) {
     gameState.distance = 10
   } else {
     gameState.down++
-    if (gameState.down === 3) stats.thirdDownAttempts++
+    // Note: thirdDownAttempts tracked at start of function
     // Note: fourthDownAttempts is tracked in executePlay when going for it (not punts/FGs)
 
     if (gameState.down > 4) {
