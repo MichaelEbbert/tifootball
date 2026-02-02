@@ -107,13 +107,23 @@ function GameBrowser({ onBack, onViewGame }) {
               <tbody>
                 <tr>
                   <td>Rushing</td>
-                  <td>{awayStats.rushing_attempts}-{awayStats.rushing_yards}</td>
-                  <td>{homeStats.rushing_attempts}-{homeStats.rushing_yards}</td>
+                  <td>{awayStats.rushing_attempts}-{awayStats.rushing_yards}, {awayStats.rushing_touchdowns || 0} TD</td>
+                  <td>{homeStats.rushing_attempts}-{homeStats.rushing_yards}, {homeStats.rushing_touchdowns || 0} TD</td>
+                </tr>
+                <tr>
+                  <td>Fumbles</td>
+                  <td>{(awayStats.rushing_fumbles || 0) + (awayStats.rec_fumbles || 0) + (awayStats.sack_fumbles || 0)} fum, {(awayStats.rushing_fumbles_lost || 0) + (awayStats.rec_fumbles_lost || 0) + (awayStats.sack_fumbles_lost || 0)} lost</td>
+                  <td>{(homeStats.rushing_fumbles || 0) + (homeStats.rec_fumbles || 0) + (homeStats.sack_fumbles || 0)} fum, {(homeStats.rushing_fumbles_lost || 0) + (homeStats.rec_fumbles_lost || 0) + (homeStats.sack_fumbles_lost || 0)} lost</td>
                 </tr>
                 <tr>
                   <td>Passing</td>
-                  <td>{awayStats.pass_completions}/{awayStats.pass_attempts} for {awayStats.pass_yards}</td>
-                  <td>{homeStats.pass_completions}/{homeStats.pass_attempts} for {homeStats.pass_yards}</td>
+                  <td>{awayStats.pass_completions}/{awayStats.pass_attempts} for {awayStats.pass_yards}, {awayStats.pass_touchdowns || 0} TD</td>
+                  <td>{homeStats.pass_completions}/{homeStats.pass_attempts} for {homeStats.pass_yards}, {homeStats.pass_touchdowns || 0} TD</td>
+                </tr>
+                <tr>
+                  <td>Interceptions</td>
+                  <td>{awayStats.pass_interceptions || 0}</td>
+                  <td>{homeStats.pass_interceptions || 0}</td>
                 </tr>
                 <tr>
                   <td>Total Yards</td>
@@ -136,14 +146,39 @@ function GameBrowser({ onBack, onViewGame }) {
                   <td>{homeStats.fourth_down_conversions || 0}/{homeStats.fourth_down_attempts || 0}</td>
                 </tr>
                 <tr>
-                  <td>Turnovers</td>
-                  <td>{awayStats.turnovers || 0}</td>
-                  <td>{homeStats.turnovers || 0}</td>
-                </tr>
-                <tr>
-                  <td>Sacks</td>
+                  <td>Sacks Allowed</td>
                   <td>{awayStats.sacks || 0} for {awayStats.sack_yards_lost || 0}</td>
                   <td>{homeStats.sacks || 0} for {homeStats.sack_yards_lost || 0}</td>
+                </tr>
+                <tr>
+                  <td>XP</td>
+                  <td>{awayStats.xp_made || 0}/{awayStats.xp_attempted || 0}</td>
+                  <td>{homeStats.xp_made || 0}/{homeStats.xp_attempted || 0}</td>
+                </tr>
+                <tr>
+                  <td>2-PT Conv</td>
+                  <td>{awayStats.two_pt_made || 0}/{awayStats.two_pt_attempted || 0}</td>
+                  <td>{homeStats.two_pt_made || 0}/{homeStats.two_pt_attempted || 0}</td>
+                </tr>
+                <tr>
+                  <td>Field Goals</td>
+                  <td>{awayStats.fg_made || 0}/{awayStats.fg_attempted || 0}</td>
+                  <td>{homeStats.fg_made || 0}/{homeStats.fg_attempted || 0}</td>
+                </tr>
+                <tr>
+                  <td>Kick Returns</td>
+                  <td>{awayStats.kick_return_attempts || 0} ret, {awayStats.kick_return_yards || 0} yds</td>
+                  <td>{homeStats.kick_return_attempts || 0} ret, {homeStats.kick_return_yards || 0} yds</td>
+                </tr>
+                <tr>
+                  <td>Punt Returns</td>
+                  <td>{awayStats.punt_return_attempts || 0} ret, {awayStats.punt_return_yards || 0} yds</td>
+                  <td>{homeStats.punt_return_attempts || 0} ret, {homeStats.punt_return_yards || 0} yds</td>
+                </tr>
+                <tr>
+                  <td>Safeties</td>
+                  <td>{awayStats.safeties_scored || 0}</td>
+                  <td>{homeStats.safeties_scored || 0}</td>
                 </tr>
                 <tr>
                   <td>Time of Possession</td>
@@ -176,17 +211,19 @@ function GameBrowser({ onBack, onViewGame }) {
               {gamesByWeek[week].map(game => (
                 <div
                   key={game.game_number}
-                  className={`game-row ${game.simulated ? 'completed' : 'upcoming'}`}
+                  className={`game-row ${game.simulated && game.game_id ? 'completed' : 'upcoming'}`}
                   onClick={() => game.simulated && game.game_id && viewGameDetail(game.game_id)}
                 >
                   <span className="game-number">#{game.game_number}</span>
                   <span className="game-matchup">
-                    {game.away_abbr} @ {game.home_abbr}
+                    {game.away_abbr || '???'} @ {game.home_abbr || '???'}
                   </span>
-                  {game.simulated ? (
+                  {game.simulated && game.game_id ? (
                     <span className="game-score">
                       {game.away_score} - {game.home_score}
                     </span>
+                  ) : game.simulated ? (
+                    <span className="game-status">No data</span>
                   ) : (
                     <span className="game-status">Upcoming</span>
                   )}

@@ -648,7 +648,11 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               <h3>{gameState.homeTeam.name}</h3>
               <div className="stat-line">
                 <span>Rushing:</span>
-                <span>{gameState.homeStats.rushingAttempts} car, {gameState.homeStats.rushingYards} yds, {gameState.homeStats.rushingFumbles} fum, {gameState.homeStats.rushingFumblesLost} lost</span>
+                <span>{gameState.homeStats.rushingAttempts} car, {gameState.homeStats.rushingYards} yds, {gameState.homeStats.rushingTouchdowns || 0} TD</span>
+              </div>
+              <div className="stat-line">
+                <span>Fumbles:</span>
+                <span>{(gameState.homeStats.rushingFumbles || 0) + (gameState.homeStats.recFumbles || 0) + (gameState.homeStats.sackFumbles || 0)} fum, {(gameState.homeStats.rushingFumblesLost || 0) + (gameState.homeStats.recFumblesLost || 0) + (gameState.homeStats.sackFumblesLost || 0)} lost</span>
               </div>
               <div className="stat-line">
                 <span>Passing:</span>
@@ -678,18 +682,22 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 <span>2-PT:</span>
                 <span>{gameState.homeStats.twoPtMade || 0}/{gameState.homeStats.twoPtAttempted || 0}</span>
               </div>
-              {(gameState.homeStats.kickReturnAttempts > 0) && (
-                <div className="stat-line">
-                  <span>Kick Returns:</span>
-                  <span>{gameState.homeStats.kickReturnAttempts} ret, {gameState.homeStats.kickReturnYards} yds</span>
-                </div>
-              )}
-              {(gameState.homeStats.safetiesScored > 0) && (
-                <div className="stat-line">
-                  <span>Safeties:</span>
-                  <span>{gameState.homeStats.safetiesScored}</span>
-                </div>
-              )}
+              <div className="stat-line">
+                <span>Field Goals:</span>
+                <span>{gameState.homeStats.fgMade || 0}/{gameState.homeStats.fgAttempted || 0}</span>
+              </div>
+              <div className="stat-line">
+                <span>Kick Returns:</span>
+                <span>{gameState.homeStats.kickReturnAttempts || 0} ret, {gameState.homeStats.kickReturnYards || 0} yds</span>
+              </div>
+              <div className="stat-line">
+                <span>Punt Returns:</span>
+                <span>{gameState.homeStats.puntReturnAttempts || 0} ret, {gameState.homeStats.puntReturnYards || 0} yds</span>
+              </div>
+              <div className="stat-line">
+                <span>Safeties:</span>
+                <span>{gameState.homeStats.safetiesScored || 0}</span>
+              </div>
               <div className="stat-line">
                 <span>Time of Possession:</span>
                 <span>{formatGameClock(gameState.homeStats.timeOfPossession)}</span>
@@ -700,7 +708,11 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               <h3>{gameState.awayTeam.name}</h3>
               <div className="stat-line">
                 <span>Rushing:</span>
-                <span>{gameState.awayStats.rushingAttempts} car, {gameState.awayStats.rushingYards} yds, {gameState.awayStats.rushingFumbles} fum, {gameState.awayStats.rushingFumblesLost} lost</span>
+                <span>{gameState.awayStats.rushingAttempts} car, {gameState.awayStats.rushingYards} yds, {gameState.awayStats.rushingTouchdowns || 0} TD</span>
+              </div>
+              <div className="stat-line">
+                <span>Fumbles:</span>
+                <span>{(gameState.awayStats.rushingFumbles || 0) + (gameState.awayStats.recFumbles || 0) + (gameState.awayStats.sackFumbles || 0)} fum, {(gameState.awayStats.rushingFumblesLost || 0) + (gameState.awayStats.recFumblesLost || 0) + (gameState.awayStats.sackFumblesLost || 0)} lost</span>
               </div>
               <div className="stat-line">
                 <span>Passing:</span>
@@ -730,18 +742,22 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 <span>2-PT:</span>
                 <span>{gameState.awayStats.twoPtMade || 0}/{gameState.awayStats.twoPtAttempted || 0}</span>
               </div>
-              {(gameState.awayStats.kickReturnAttempts > 0) && (
-                <div className="stat-line">
-                  <span>Kick Returns:</span>
-                  <span>{gameState.awayStats.kickReturnAttempts} ret, {gameState.awayStats.kickReturnYards} yds</span>
-                </div>
-              )}
-              {(gameState.awayStats.safetiesScored > 0) && (
-                <div className="stat-line">
-                  <span>Safeties:</span>
-                  <span>{gameState.awayStats.safetiesScored}</span>
-                </div>
-              )}
+              <div className="stat-line">
+                <span>Field Goals:</span>
+                <span>{gameState.awayStats.fgMade || 0}/{gameState.awayStats.fgAttempted || 0}</span>
+              </div>
+              <div className="stat-line">
+                <span>Kick Returns:</span>
+                <span>{gameState.awayStats.kickReturnAttempts || 0} ret, {gameState.awayStats.kickReturnYards || 0} yds</span>
+              </div>
+              <div className="stat-line">
+                <span>Punt Returns:</span>
+                <span>{gameState.awayStats.puntReturnAttempts || 0} ret, {gameState.awayStats.puntReturnYards || 0} yds</span>
+              </div>
+              <div className="stat-line">
+                <span>Safeties:</span>
+                <span>{gameState.awayStats.safetiesScored || 0}</span>
+              </div>
               <div className="stat-line">
                 <span>Time of Possession:</span>
                 <span>{formatGameClock(gameState.awayStats.timeOfPossession)}</span>

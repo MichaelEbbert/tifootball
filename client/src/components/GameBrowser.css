@@ -58,10 +58,12 @@
 
 .game-row.completed {
   cursor: pointer;
+  background: #000;
+  color: #fff;
 }
 
 .game-row.completed:hover {
-  background: #3a3a3a;
+  background: #222;
 }
 
 .game-row.upcoming {

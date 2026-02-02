@@ -101,6 +101,7 @@ let numGames = 100
 let fourthDownTest = false
 let rotationMode = false
 let fullMode = true  // Use full game mode (with kickoffs/punts/FGs) - default on
+let validateYardlines = false
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--games' && args[i + 1]) {
@@ -117,6 +118,9 @@ for (let i = 0; i < args.length; i++) {
   }
   if (args[i] === '--round-robin') {
     // Round-robin mode handled after DB load
+  }
+  if (args[i] === '--validate-yardlines') {
+    validateYardlines = true
   }
 }
 
@@ -160,7 +164,94 @@ if (fourthDownTest) {
 }
 
 // Load teams from database (or use mock if not available)
-const dbTeams = await loadTeamsFromDatabase()
+const dbTeamsPreload = await loadTeamsFromDatabase()
+
+// Yardline validation test
+if (validateYardlines) {
+  console.log(`\n🏈 Yardline Validation Test`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+  console.log(`Running ${numGames} games, checking every play for invalid yardlines...\n`)
+
+  const useDbTeamsValidate = dbTeamsPreload && dbTeamsPreload.length >= 2
+  let totalPlays = 0
+  let invalidYardlines = []
+
+  const startTimeValidate = Date.now()
+
+  for (let game = 0; game < numGames; game++) {
+    // Pick teams
+    let homeTeam, awayTeam
+    if (useDbTeamsValidate) {
+      const homeIdx = Math.floor(Math.random() * dbTeamsPreload.length)
+      let awayIdx = Math.floor(Math.random() * dbTeamsPreload.length)
+      while (awayIdx === homeIdx) {
+        awayIdx = Math.floor(Math.random() * dbTeamsPreload.length)
+      }
+      homeTeam = dbTeamsPreload[homeIdx]
+      awayTeam = dbTeamsPreload[awayIdx]
+    } else {
+      homeTeam = { id: 1, city: 'Home', name: 'Team', abbreviation: 'HME' }
+      awayTeam = { id: 2, city: 'Away', name: 'Team', abbreviation: 'AWY' }
+    }
+
+    const gameState = initializeGame(homeTeam, awayTeam, false, false)
+
+    while (!isGameOver(gameState)) {
+      executePlay(gameState)
+      totalPlays++
+
+      // Check for invalid yardline
+      // Note: yardline >= 100 is valid if awaitingKickoff (TD just scored)
+      // yardline <= 0 is valid if... actually it shouldn't happen
+      const isInvalidYardline = (gameState.yardline < 1 || gameState.yardline > 99) && !gameState.awaitingKickoff
+      if (isInvalidYardline) {
+        invalidYardlines.push({
+          game: game + 1,
+          play: gameState.playNumber,
+          yardline: gameState.yardline,
+          quarter: gameState.quarter,
+          down: gameState.down,
+          distance: gameState.distance,
+          possession: gameState.possession,
+          awaitingKickoff: gameState.awaitingKickoff || false
+        })
+      }
+    }
+
+    // Progress indicator
+    if ((game + 1) % 100 === 0 || game === numGames - 1) {
+      process.stdout.write(`\r  Simulated ${game + 1} / ${numGames} games (${totalPlays} plays)`)
+    }
+  }
+
+  const endTimeValidate = Date.now()
+  const durationValidate = (endTimeValidate - startTimeValidate) / 1000
+
+  console.log(`\n\n📊 Results`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+  console.log(`  Games simulated:            ${numGames}`)
+  console.log(`  Total plays checked:        ${totalPlays}`)
+  console.log(`  Invalid yardlines found:    ${invalidYardlines.length}`)
+
+  if (invalidYardlines.length > 0) {
+    console.log(`\n❌ INVALID YARDLINES DETECTED:`)
+    invalidYardlines.slice(0, 20).forEach(inv => {
+      console.log(`  Game ${inv.game}, Play ${inv.play}: Q${inv.quarter} ${inv.down}&${inv.distance} at YARDLINE ${inv.yardline} (${inv.possession} ball)`)
+    })
+    if (invalidYardlines.length > 20) {
+      console.log(`  ... and ${invalidYardlines.length - 20} more`)
+    }
+  } else {
+    console.log(`\n✅ All yardlines valid (1-99)!`)
+  }
+
+  console.log(`\n  Completed in ${durationValidate.toFixed(2)} seconds`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
+  process.exit(invalidYardlines.length > 0 ? 1 : 0)
+}
+
+// Use preloaded teams for other modes
+const dbTeams = dbTeamsPreload
 
 // Fallback mock teams if database not available
 const mockHomeTeam = {

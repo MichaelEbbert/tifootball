@@ -205,9 +205,9 @@ function queryOne(sql, params = []) {
 // Helper function to run an insert/update/delete
 function runSql(sql, params = []) {
   db.run(sql, params)
-  saveDatabase()
-  // Get last insert rowid
+  // Get last insert rowid BEFORE saveDatabase (sql.js may reset it after export)
   const result = queryOne('SELECT last_insert_rowid() as id')
+  saveDatabase()
   return { lastInsertRowid: result ? result.id : null }
 }
 

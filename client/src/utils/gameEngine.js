@@ -840,8 +840,19 @@ function executePass(gameState, forcedType = null) {
     logger.info(`INTERCEPTION! ${gameState.possession} pass picked off at ${airYards} air yards, returned ${returnYards} yards`)
 
     // Change possession at the interception spot
-    gameState.yardline += airYards  // Move to where INT happened
-    changePossession(gameState, 0, true)
+    // If intercepted in the end zone, it's a touchback (ball at 20)
+    const intSpot = gameState.yardline + airYards
+    if (intSpot >= 100) {
+      // Touchback - interception in end zone
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home'
+      gameState.yardline = 20
+      gameState.down = 1
+      gameState.distance = 10
+      markOvertimePossession(gameState)
+    } else {
+      gameState.yardline = intSpot
+      changePossession(gameState, 0, true)
+    }
 
     return {
       type: 'pass',
@@ -1727,6 +1738,14 @@ function changePossession(gameState, fieldChange, turnoverOnDowns = false) {
   } else {
     // Turnover on downs or normal mode: maintain field position
     gameState.yardline = 100 - (gameState.yardline + fieldChange)
+  }
+
+  // Safeguard: clamp yardline to valid range (1-99)
+  // If somehow negative or zero, treat as touchback at 20
+  if (gameState.yardline <= 0) {
+    gameState.yardline = 20
+  } else if (gameState.yardline >= 100) {
+    gameState.yardline = 99
   }
 
   gameState.down = 1
