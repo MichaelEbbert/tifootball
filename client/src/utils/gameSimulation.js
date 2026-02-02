@@ -210,8 +210,10 @@ export function kickoffReturn(options = {}) {
  * @returns {string} Formatted time (e.g., "12:45")
  */
 export function formatGameClock(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
+  // Floor at 0 - don't show negative time
+  const clampedSeconds = Math.max(0, totalSeconds)
+  const minutes = Math.floor(clampedSeconds / 60)
+  const seconds = clampedSeconds % 60
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 

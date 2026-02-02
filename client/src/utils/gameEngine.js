@@ -791,8 +791,11 @@ function executePass(gameState, forcedType = null) {
       gameState.score[defenseTeam] += 6
       logger.info(`🏈 PICK-SIX! ${defenseTeam} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
-      // Attempt XP/2PT
-      if (shouldGoForTwo(gameState)) {
+      // Attempt XP/2PT (skip if game-winning TD as time expires)
+      if (shouldSkipConversion(gameState)) {
+        gameState.lastXpResult = null
+        gameState.lastConversionType = 'skipped'
+      } else if (shouldGoForTwo(gameState)) {
         const twoPtGood = attemptTwoPointConversion(gameState)
         gameState.lastXpResult = twoPtGood
         gameState.lastConversionType = '2pt'
@@ -1031,8 +1034,10 @@ function executePunt(gameState) {
   const yardsToGoal = 100 - landSpot  // Distance to scoring end zone
   const racResult = runAfterCatch({ yardsToGoal })
   const returnYards = racResult.yards
+  const returnSteps = racResult.steps
   const returnerStats = getStats(gameState, returningTeam)
   returnerStats.puntReturnYards += returnYards
+  const catchYardline = 100 - landSpot  // Where the returner caught it
 
   // Check for punt return touchdown
   if (returnYards >= yardsToGoal) {
@@ -1041,8 +1046,11 @@ function executePunt(gameState) {
     gameState.score[returningTeam] += 6
     logger.info(`🏈 PUNT RETURN TOUCHDOWN! ${returningTeam} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
-    // Attempt XP/2PT
-    if (shouldGoForTwo(gameState)) {
+    // Attempt XP/2PT (skip if game-winning TD as time expires)
+    if (shouldSkipConversion(gameState)) {
+      gameState.lastXpResult = null
+      gameState.lastConversionType = 'skipped'
+    } else if (shouldGoForTwo(gameState)) {
       const twoPtGood = attemptTwoPointConversion(gameState)
       gameState.lastXpResult = twoPtGood
       gameState.lastConversionType = '2pt'
@@ -1073,11 +1081,13 @@ function executePunt(gameState) {
       yards: puntAirYards,
       netYards: 0,
       returnYards: returnYards,
+      returnSteps: returnSteps,
+      catchYardline: catchYardline,
       touchdown: true,
       xpGood: gameState.lastXpResult,
       conversionType: gameState.lastConversionType,
       twoPtPlayType: gameState.lastTwoPtPlayType,
-      description: `Punt ${puntAirYards} yards, returned ${returnYards} yards for a TOUCHDOWN!`
+      description: `Punt ${puntAirYards} yards, fielded at the ${catchYardline}. Returned ${returnYards} yards for a TOUCHDOWN!`
     }
   }
 
@@ -1088,7 +1098,9 @@ function executePunt(gameState) {
     yards: puntAirYards,
     netYards: netPuntYards - returnYards,
     returnYards: returnYards,
-    description: `Punt ${puntAirYards} yards, returned ${returnYards} yards`
+    returnSteps: returnSteps,
+    catchYardline: catchYardline,
+    description: `Punt ${puntAirYards} yards, fielded at the ${catchYardline}. Returned ${returnYards} yards to the ${gameState.yardline}.`
   }
 }
 
@@ -1349,8 +1361,11 @@ function updateDownAndDistance(gameState, yards) {
     gameState.score[gameState.possession] += 6
     logger.info(`🏈 TOUCHDOWN! ${gameState.possession} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
-    // Decide: 2-point conversion or extra point?
-    if (shouldGoForTwo(gameState)) {
+    // Decide: skip, 2-point conversion, or extra point?
+    if (shouldSkipConversion(gameState)) {
+      gameState.lastXpResult = null
+      gameState.lastConversionType = 'skipped'
+    } else if (shouldGoForTwo(gameState)) {
       const twoPtGood = attemptTwoPointConversion(gameState)
       gameState.lastXpResult = twoPtGood
       gameState.lastConversionType = '2pt'
@@ -1401,6 +1416,24 @@ function updateDownAndDistance(gameState, yards) {
 }
 
 /**
+ * Check if XP/2PT should be skipped (game-winning TD as time expires)
+ * @returns {boolean} true if conversion should be skipped
+ */
+function shouldSkipConversion(gameState) {
+  // Only skip in Q4 or OT when clock has expired
+  if (gameState.clock > 0) return false
+  if (gameState.quarter < 4 && !gameState.overtime) return false
+
+  // Check if scoring team is now ahead (TD already added)
+  const scoringTeam = gameState.possession
+  const myScore = gameState.score[scoringTeam]
+  const oppScore = gameState.score[scoringTeam === 'home' ? 'away' : 'home']
+
+  // If ahead, skip the conversion - game is over
+  return myScore > oppScore
+}
+
+/**
  * Decide whether to attempt 2-point conversion based on game situation
  * Analytics-based decision for Q4 (and late Q3)
  * @returns {boolean} true if should go for 2
@@ -1444,6 +1477,10 @@ function shouldGoForTwo(gameState) {
 function attemptTwoPointConversion(gameState) {
   const stats = getStats(gameState, gameState.possession)
   stats.twoPtAttempted++
+
+  // 2PT takes 4-8 seconds
+  const conversionTime = 4 + Math.floor(Math.random() * 5)
+  gameState.clock -= conversionTime
 
   // Get coach tendencies (use defaults for now, will pull from coach data later)
   const runPct = GAME_CONSTANTS.TWO_PT_RUN_PCT
@@ -1489,6 +1526,10 @@ function attemptExtraPoint(gameState) {
   const stats = getStats(gameState, gameState.possession)
   stats.xpAttempted++
 
+  // XP takes 4-8 seconds
+  const xpTime = 4 + Math.floor(Math.random() * 5)
+  gameState.clock -= xpTime
+
   if (Math.random() < GAME_CONSTANTS.XP_SUCCESS) {
     stats.xpMade++
     gameState.score[gameState.possession] += 1
@@ -1509,6 +1550,7 @@ function executeOpeningKickoff(gameState) {
   const receiver = kicker === 'home' ? 'away' : 'home'
   const receiverStats = getStats(gameState, receiver)
   const receiverTeam = receiver === 'home' ? gameState.homeTeam : gameState.awayTeam
+  const kickingTeam = kicker === 'home' ? gameState.homeTeam : gameState.awayTeam
 
   // Handle overtime possession marking if needed
   if (gameState.overtimeReceiverToMark) {
@@ -1527,7 +1569,8 @@ function executeOpeningKickoff(gameState) {
       touchback: true,
       returnYards: 0,
       endYardline: 30,
-      description: `${receiverTeam.name} touchback, ball at the 30`
+      kickingTeamName: kickingTeam.name,
+      description: `${kickingTeam.name} kickoff. Touchback, ball at the 30.`
     }
   }
 
@@ -1538,6 +1581,7 @@ function executeOpeningKickoff(gameState) {
   receiverStats.kickReturnAttempts++
   const returnResult = kickoffReturn({ yardsToGoal })
   const returnYards = returnResult.yards
+  const returnSteps = returnResult.steps
   receiverStats.kickReturnYards += returnYards
 
   gameState.possession = receiver
@@ -1552,9 +1596,12 @@ function executeOpeningKickoff(gameState) {
     receiverStats.kickReturnTouchdowns = (receiverStats.kickReturnTouchdowns || 0) + 1
     logger.info(`🏈 KICK RETURN TOUCHDOWN! ${receiver} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
-    // Attempt XP/2PT
+    // Attempt XP/2PT (skip if game-winning TD as time expires)
     let xpGood, conversionType
-    if (shouldGoForTwo(gameState)) {
+    if (shouldSkipConversion(gameState)) {
+      xpGood = null
+      conversionType = 'skipped'
+    } else if (shouldGoForTwo(gameState)) {
       xpGood = attemptTwoPointConversion(gameState)
       conversionType = '2pt'
     } else {
@@ -1562,7 +1609,9 @@ function executeOpeningKickoff(gameState) {
       conversionType = 'xp'
     }
 
-    const extraPointValue = conversionType === '2pt'
+    const extraPointValue = conversionType === 'skipped'
+      ? 'skipped'
+      : conversionType === '2pt'
       ? (xpGood ? '2pt_good' : '2pt_no_good')
       : (xpGood ? 'good' : 'no_good')
     addScoringEntry(gameState, 'TD', 'kick_return', returnYards, extraPointValue, receiver)
@@ -1575,17 +1624,23 @@ function executeOpeningKickoff(gameState) {
       type: 'kickoff',
       touchdown: true,
       returnYards: returnYards,
+      startYardline: startYardline,
+      steps: returnSteps,
+      kickingTeamName: kickingTeam.name,
       xpGood: xpGood,
       conversionType: conversionType,
-      description: `${receiverTeam.name} kickoff return ${returnYards} yards for a TOUCHDOWN!`
+      description: `Kickoff fielded at the ${startYardline}. Returned ${returnYards} yards for a TOUCHDOWN!`
     }
   }
 
   return {
     type: 'kickoff',
     returnYards: returnYards,
+    startYardline: startYardline,
+    steps: returnSteps,
+    kickingTeamName: kickingTeam.name,
     endYardline: gameState.yardline,
-    description: `${receiverTeam.name} kickoff return ${returnYards} yards to the ${gameState.yardline}`
+    description: `Kickoff fielded at the ${startYardline}. Returned ${returnYards} yards to the ${gameState.yardline}.`
   }
 }
 
@@ -1630,8 +1685,11 @@ function kickoff(gameState) {
       gameState.score[receiver] += 6
       logger.info(`🏈 KICK RETURN TOUCHDOWN! ${receiver} scores. Score: ${gameState.score.home}-${gameState.score.away}`)
 
-      // Attempt XP/2PT
-      if (shouldGoForTwo(gameState)) {
+      // Attempt XP/2PT (skip if game-winning TD as time expires)
+      if (shouldSkipConversion(gameState)) {
+        gameState.lastKickReturnXpResult = null
+        gameState.lastKickReturnConversionType = 'skipped'
+      } else if (shouldGoForTwo(gameState)) {
         const twoPtGood = attemptTwoPointConversion(gameState)
         gameState.lastKickReturnXpResult = twoPtGood
         gameState.lastKickReturnConversionType = '2pt'
@@ -1642,7 +1700,9 @@ function kickoff(gameState) {
       }
 
       // Add scoring entry
-      const extraPointValue = gameState.lastKickReturnConversionType === '2pt'
+      const extraPointValue = gameState.lastKickReturnConversionType === 'skipped'
+        ? 'skipped'
+        : gameState.lastKickReturnConversionType === '2pt'
         ? (gameState.lastKickReturnXpResult ? '2pt_good' : '2pt_no_good')
         : (gameState.lastKickReturnXpResult ? 'good' : 'no_good')
       addScoringEntry(gameState, 'TD', 'kick_return', returnYards, extraPointValue, receiver)

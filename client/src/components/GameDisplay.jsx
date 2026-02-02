@@ -236,6 +236,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
       } else if (playResult.type === 'pass' && playResult.complete && playResult.racSteps && playResult.racSteps.length > 0) {
         // Completed pass with run after catch - animate it
         animatePassPlay(playResult, gameState)
+      } else if (playResult.type === 'kickoff' && playResult.steps && playResult.steps.length > 0) {
+        // Kickoff return with steps - animate it
+        animateKickoffReturn(playResult, gameState)
+      } else if (playResult.type === 'punt' && playResult.returnSteps && playResult.returnSteps.length > 0) {
+        // Punt return with steps - animate it
+        animatePuntReturn(playResult, gameState)
       } else {
         // Non-running play or no steps, show result directly
         // Deep copy to ensure React sees the change
@@ -255,6 +261,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             return
           }
           setPrePlayState(null)
+          setCurrentPlay(null)
           setAnimationPhase('idle')
         }
         animationRef.current = setTimeout(finishNonRunPlay, pauseDuration * 1000)
@@ -310,6 +317,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 return
               }
               setPrePlayState(null)
+              setCurrentPlay(null)
               setAnimationPhase('idle')
             }
             animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
@@ -323,6 +331,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               return
             }
             setPrePlayState(null)
+            setCurrentPlay(null)
             setAnimationPhase('idle')
           }
           animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
@@ -382,6 +391,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
                 return
               }
               setPrePlayState(null)
+              setCurrentPlay(null)
               setAnimationPhase('idle')
             }
             animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
@@ -394,6 +404,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               return
             }
             setPrePlayState(null)
+            setCurrentPlay(null)
             setAnimationPhase('idle')
           }
           animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
@@ -403,6 +414,158 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
 
     // Start with pass complete message
     setRunningText(`${passTypeCap} pass complete for ${playResult.airYards} yards, running...`)
+    animationRef.current = setTimeout(showNextStep, stepDelay)
+  }
+
+  function animateKickoffReturn(playResult, mutatedGameState) {
+    setAnimationPhase('running')
+    const steps = playResult.steps
+    const startYardline = playResult.startYardline
+    const kickingTeamName = playResult.kickingTeamName
+    let stepIndex = 0
+
+    // Animation speed: 0.5 second per yard, or 50ms in fast mode
+    const stepDelay = pauseDuration < 1 ? 50 : 500
+
+    function showNextStep() {
+      // Check if paused - keep polling instead of exiting
+      if (isPausedRef.current) {
+        animationRef.current = setTimeout(showNextStep, 100)
+        return
+      }
+
+      if (stepIndex < steps.length) {
+        const yardsText = steps.slice(0, stepIndex + 1).map(y => `...${y}`).join(' ')
+        setRunningText(`Kickoff fielded at the ${startYardline}. Running ${yardsText}`)
+        stepIndex++
+        animationRef.current = setTimeout(showNextStep, stepDelay)
+      } else {
+        // Animation complete
+        const newState = JSON.parse(JSON.stringify(mutatedGameState))
+        if (gameStateRef.current) {
+          newState.rotationMode = gameStateRef.current.rotationMode
+          newState.rotationIndex = gameStateRef.current.rotationIndex
+        }
+        setGameState(newState)
+        setAnimationPhase('result')
+
+        // Check for touchdown
+        if (playResult.touchdown) {
+          const showTouchdown = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(showTouchdown, 100)
+              return
+            }
+            setAnimationPhase('touchdown')
+            const finishTouchdown = () => {
+              if (isPausedRef.current) {
+                animationRef.current = setTimeout(finishTouchdown, 100)
+                return
+              }
+              setPrePlayState(null)
+              setCurrentPlay(null)
+              setAnimationPhase('idle')
+            }
+            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+          }
+          animationRef.current = setTimeout(showTouchdown, 500)
+        } else {
+          const finishPlay = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(finishPlay, 100)
+              return
+            }
+            setPrePlayState(null)
+            setCurrentPlay(null)
+            setAnimationPhase('idle')
+          }
+          animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
+        }
+      }
+    }
+
+    // Start by showing kicking team, then show fielded message
+    setRunningText(`${kickingTeamName} kicking off...`)
+    const startReturn = () => {
+      if (isPausedRef.current) {
+        animationRef.current = setTimeout(startReturn, 100)
+        return
+      }
+      setRunningText(`Kickoff fielded at the ${startYardline}. Running...`)
+      animationRef.current = setTimeout(showNextStep, stepDelay)
+    }
+    animationRef.current = setTimeout(startReturn, pauseDuration * 1000)
+  }
+
+  function animatePuntReturn(playResult, mutatedGameState) {
+    setAnimationPhase('running')
+    const steps = playResult.returnSteps
+    const puntYards = playResult.yards
+    const catchYardline = playResult.catchYardline
+    let stepIndex = 0
+
+    // Animation speed: 0.5 second per yard, or 50ms in fast mode
+    const stepDelay = pauseDuration < 1 ? 50 : 500
+
+    function showNextStep() {
+      // Check if paused - keep polling instead of exiting
+      if (isPausedRef.current) {
+        animationRef.current = setTimeout(showNextStep, 100)
+        return
+      }
+
+      if (stepIndex < steps.length) {
+        const yardsText = steps.slice(0, stepIndex + 1).map(y => `...${y}`).join(' ')
+        setRunningText(`Punt ${puntYards} yards, fielded at the ${catchYardline}. Running ${yardsText}`)
+        stepIndex++
+        animationRef.current = setTimeout(showNextStep, stepDelay)
+      } else {
+        // Animation complete
+        const newState = JSON.parse(JSON.stringify(mutatedGameState))
+        if (gameStateRef.current) {
+          newState.rotationMode = gameStateRef.current.rotationMode
+          newState.rotationIndex = gameStateRef.current.rotationIndex
+        }
+        setGameState(newState)
+        setAnimationPhase('result')
+
+        // Check for touchdown
+        if (playResult.touchdown) {
+          const showTouchdown = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(showTouchdown, 100)
+              return
+            }
+            setAnimationPhase('touchdown')
+            const finishTouchdown = () => {
+              if (isPausedRef.current) {
+                animationRef.current = setTimeout(finishTouchdown, 100)
+                return
+              }
+              setPrePlayState(null)
+              setCurrentPlay(null)
+              setAnimationPhase('idle')
+            }
+            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+          }
+          animationRef.current = setTimeout(showTouchdown, 500)
+        } else {
+          const finishPlay = () => {
+            if (isPausedRef.current) {
+              animationRef.current = setTimeout(finishPlay, 100)
+              return
+            }
+            setPrePlayState(null)
+            setCurrentPlay(null)
+            setAnimationPhase('idle')
+          }
+          animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
+        }
+      }
+    }
+
+    // Start with punt fielded message
+    setRunningText(`Punt ${puntYards} yards, fielded at the ${catchYardline}. Running...`)
     animationRef.current = setTimeout(showNextStep, stepDelay)
   }
 
@@ -624,24 +787,30 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     const distance = prePlayState?.distance || gameState.distance
     const downDistStr = formatDownDistance(down, distance)
 
+    // For kickoff plays, show kicking team instead of down/distance
+    const isKickoff = currentPlay?.type === 'kickoff'
+
     if (animationPhase === 'running') {
       return (
         <div className="play-result">
-          <div className="play-number">Play #{playNum} ({downDistStr})</div>
+          <div className="play-number">{isKickoff ? `Play #${playNum}, ${currentPlay.kickingTeamName} kicking off` : `Play #${playNum} (${downDistStr})`}</div>
           <div className="play-description running-animation">{runningText}</div>
         </div>
       )
     }
 
     if (animationPhase === 'touchdown') {
+      const isSkipped = currentPlay?.conversionType === 'skipped'
       const is2Pt = currentPlay?.conversionType === '2pt'
       const playTypeText = currentPlay?.twoPtPlayType ? ` (${currentPlay.twoPtPlayType})` : ''
-      const conversionText = is2Pt
+      const conversionText = isSkipped
+        ? 'No XP needed - GAME OVER!'
+        : is2Pt
         ? (currentPlay?.xpGood ? `2PT${playTypeText} Good!` : `2PT${playTypeText} No Good`)
         : (currentPlay?.xpGood ? 'XP Good!' : 'XP No Good')
       return (
         <div className="play-result touchdown-display">
-          <div className="play-number">Play #{playNum} ({downDistStr})</div>
+          <div className="play-number">{isKickoff ? `Play #${playNum}, ${currentPlay.kickingTeamName} kicking off` : `Play #${playNum} (${downDistStr})`}</div>
           <div className="touchdown-text">TOUCHDOWN!</div>
           <div className="xp-result">
             {conversionText}
@@ -651,12 +820,22 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
       )
     }
 
-    if ((animationPhase === 'result' || animationPhase === 'idle') && currentPlay) {
+    if (animationPhase === 'result' && currentPlay) {
       return (
         <div className="play-result">
-          <div className="play-number">Play #{playNum} ({downDistStr})</div>
+          <div className="play-number">{isKickoff ? `Play #${playNum}, ${currentPlay.kickingTeamName} kicking off` : `Play #${playNum} (${downDistStr})`}</div>
           <div className="play-description">{getPlayTypePrefix(currentPlay)}{currentPlay.description}</div>
           {currentPlay.turnover && <div className="turnover">TURNOVER!</div>}
+        </div>
+      )
+    }
+
+    // Idle state - show play number with down/distance but no action text
+    if (animationPhase === 'idle') {
+      return (
+        <div className="play-result">
+          <div className="play-number">Play #{gameState.playNumber + 1} ({formatDownDistance(gameState.down, gameState.distance)})</div>
+          <div className="play-description">&nbsp;</div>
         </div>
       )
     }

@@ -43,13 +43,13 @@ const TENDENCY_RANGES = {
   '1st_10':     { run: [35, 55], short: [20, 35], medium: [12, 25], long: [4, 15] },   // Base
   '2nd_short':  { run: [40, 60], short: [18, 32], medium: [10, 22], long: [3, 12] },   // Lean run
   '2nd_medium': { run: [30, 50], short: [22, 37], medium: [14, 27], long: [5, 16] },   // Slight pass
-  '2nd_long':   { run: [25, 45], short: [22, 37], medium: [15, 28], long: [6, 18] },   // Pass heavy
+  '2nd_long':   { run: [10, 22], short: [28, 40], medium: [28, 40], long: [8, 20] },   // Pass heavy - need yards
   '3rd_short':  { run: [45, 65], short: [15, 30], medium: [8, 20], long: [2, 10] },    // Run heavy
   '3rd_medium': { run: [30, 50], short: [22, 37], medium: [14, 27], long: [5, 16] },   // Slight pass
-  '3rd_long':   { run: [25, 45], short: [22, 37], medium: [15, 28], long: [6, 18] },   // Pass heavy
+  '3rd_long':   { run: [10, 22], short: [28, 40], medium: [28, 40], long: [8, 20] },   // Pass heavy - must convert
   '4th_short':  { run: [45, 65], short: [15, 30], medium: [8, 20], long: [2, 10] },    // Run heavy (like 3rd short)
   '4th_medium': { run: [30, 50], short: [22, 37], medium: [14, 27], long: [5, 16] },   // Slight pass
-  '4th_long':   { run: [25, 45], short: [22, 37], medium: [15, 28], long: [6, 18] }    // Pass heavy
+  '4th_long':   { run: [10, 22], short: [28, 40], medium: [28, 40], long: [8, 20] }    // Pass heavy - desperation
 }
 
 /**
