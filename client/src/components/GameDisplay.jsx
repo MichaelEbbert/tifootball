@@ -155,6 +155,21 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
     logger.info(`Final score: ${finalState.homeTeam.name} ${finalState.score.home} - ${finalState.awayTeam.name} ${finalState.score.away}`)
   }
 
+  // Helper to get pause duration for special plays in fast mode
+  // In fast mode (pauseDuration < 1), kickoffs, punts, and scores get 3 second pauses
+  function getSpecialPause(playResult, isScore = false) {
+    const isFastMode = pauseDuration < 1
+    if (!isFastMode) {
+      return pauseDuration * 1000
+    }
+    // In fast mode, special plays get 3 second pause
+    if (isScore || playResult?.type === 'kickoff' || playResult?.type === 'punt' ||
+        playResult?.touchdown || playResult?.fieldGoalGood) {
+      return 3000
+    }
+    return pauseDuration * 1000
+  }
+
   // Keep refs in sync with state
   useEffect(() => {
     isPausedRef.current = isPaused
@@ -264,7 +279,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
           setCurrentPlay(null)
           setAnimationPhase('idle')
         }
-        animationRef.current = setTimeout(finishNonRunPlay, pauseDuration * 1000)
+        animationRef.current = setTimeout(finishNonRunPlay, getSpecialPause(playResult))
       }
     }, pauseDuration * 1000)
 
@@ -310,7 +325,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               return
             }
             setAnimationPhase('touchdown')
-            // Touchdown pause is 5x normal
+            // Touchdown pause is 5x normal, or 3s minimum in fast mode
+            const tdPause = pauseDuration < 1 ? 3000 : pauseDuration * 5 * 1000
             const finishTouchdown = () => {
               if (isPausedRef.current) {
                 animationRef.current = setTimeout(finishTouchdown, 100)
@@ -320,7 +336,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               setCurrentPlay(null)
               setAnimationPhase('idle')
             }
-            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+            animationRef.current = setTimeout(finishTouchdown, tdPause)
           }
           animationRef.current = setTimeout(showTouchdown, 500)
         } else {
@@ -385,6 +401,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               return
             }
             setAnimationPhase('touchdown')
+            // Touchdown pause is 5x normal, or 3s minimum in fast mode
+            const tdPause = pauseDuration < 1 ? 3000 : pauseDuration * 5 * 1000
             const finishTouchdown = () => {
               if (isPausedRef.current) {
                 animationRef.current = setTimeout(finishTouchdown, 100)
@@ -394,7 +412,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               setCurrentPlay(null)
               setAnimationPhase('idle')
             }
-            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+            animationRef.current = setTimeout(finishTouchdown, tdPause)
           }
           animationRef.current = setTimeout(showTouchdown, 500)
         } else {
@@ -457,6 +475,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               return
             }
             setAnimationPhase('touchdown')
+            // Touchdown pause is 5x normal, or 3s minimum in fast mode
+            const tdPause = pauseDuration < 1 ? 3000 : pauseDuration * 5 * 1000
             const finishTouchdown = () => {
               if (isPausedRef.current) {
                 animationRef.current = setTimeout(finishTouchdown, 100)
@@ -466,10 +486,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               setCurrentPlay(null)
               setAnimationPhase('idle')
             }
-            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+            animationRef.current = setTimeout(finishTouchdown, tdPause)
           }
           animationRef.current = setTimeout(showTouchdown, 500)
         } else {
+          // Kickoff gets 3s pause in fast mode
+          const kickoffPause = pauseDuration < 1 ? 3000 : pauseDuration * 1000
           const finishPlay = () => {
             if (isPausedRef.current) {
               animationRef.current = setTimeout(finishPlay, 100)
@@ -479,12 +501,14 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             setCurrentPlay(null)
             setAnimationPhase('idle')
           }
-          animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
+          animationRef.current = setTimeout(finishPlay, kickoffPause)
         }
       }
     }
 
     // Start by showing kicking team, then show fielded message
+    // Use 3s pause in fast mode for kickoff
+    const kickoffStartPause = pauseDuration < 1 ? 3000 : pauseDuration * 1000
     setRunningText(`${kickingTeamName} kicking off...`)
     const startReturn = () => {
       if (isPausedRef.current) {
@@ -494,7 +518,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
       setRunningText(`Kickoff fielded at the ${startYardline}. Running...`)
       animationRef.current = setTimeout(showNextStep, stepDelay)
     }
-    animationRef.current = setTimeout(startReturn, pauseDuration * 1000)
+    animationRef.current = setTimeout(startReturn, kickoffStartPause)
   }
 
   function animatePuntReturn(playResult, mutatedGameState) {
@@ -537,6 +561,8 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               return
             }
             setAnimationPhase('touchdown')
+            // Touchdown pause is 5x normal, or 3s minimum in fast mode
+            const tdPause = pauseDuration < 1 ? 3000 : pauseDuration * 5 * 1000
             const finishTouchdown = () => {
               if (isPausedRef.current) {
                 animationRef.current = setTimeout(finishTouchdown, 100)
@@ -546,10 +572,12 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
               setCurrentPlay(null)
               setAnimationPhase('idle')
             }
-            animationRef.current = setTimeout(finishTouchdown, pauseDuration * 5 * 1000)
+            animationRef.current = setTimeout(finishTouchdown, tdPause)
           }
           animationRef.current = setTimeout(showTouchdown, 500)
         } else {
+          // Punt gets 3s pause in fast mode
+          const puntPause = pauseDuration < 1 ? 3000 : pauseDuration * 1000
           const finishPlay = () => {
             if (isPausedRef.current) {
               animationRef.current = setTimeout(finishPlay, 100)
@@ -559,7 +587,7 @@ function GameDisplay({ game, pauseDuration, onPauseDurationChange, onNextGame, o
             setCurrentPlay(null)
             setAnimationPhase('idle')
           }
-          animationRef.current = setTimeout(finishPlay, pauseDuration * 1000)
+          animationRef.current = setTimeout(finishPlay, puntPause)
         }
       }
     }
