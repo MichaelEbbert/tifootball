@@ -9,11 +9,14 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const app = express()
-const PORT = 3002
+const PORT = process.env.PORT || 3001
 
 // Middleware
 app.use(cors())
 app.use(express.json())
+
+// Serve static files from React build (for production)
+app.use(express.static(join(__dirname, '..', 'client', 'dist')))
 
 // Load name data from JSON files
 const surnames = JSON.parse(
@@ -605,6 +608,11 @@ app.post('/api/season/reset', (req, res) => {
   runSql('DELETE FROM games')
   runSql('UPDATE schedule SET simulated = 0, game_id = NULL')
   res.json({ message: 'Season reset successfully' })
+})
+
+// Catch-all for client-side routing (serve React app for non-API routes)
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, '..', 'client', 'dist', 'index.html'))
 })
 
 // Initialize database and start server
