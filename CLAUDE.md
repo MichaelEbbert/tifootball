@@ -23,6 +23,9 @@ Already configured in `/etc/nginx/conf.d/subdomains.conf` to proxy to port 3001.
 3. Create systemd service (use `/etc/systemd/system/taskschedule.service` as template)
 4. Enable and start: `sudo systemctl enable --now tifootball`
 
+### Nginx Authentication
+See `C:\claude_projects\recipeshoppinglist\CLAUDE.md` for instructions on nginx-level auth to protect all deployed apps.
+
 ---
 
 ## IMPORTANT: Season Setup Checklist
