@@ -1,5 +1,28 @@
 # TI Football Game - 1979 BASIC Simulation
 
+## AWS Deployment Info
+
+- **Subdomain:** https://tifootball.mebbert.com
+- **Internal Port:** 3001
+- **Status:** Awaiting deployment
+
+### SSH Access
+```bash
+ssh -i "C:\claude_projects\taskschedule\taskschedule-key.pem" ec2-user@100.50.222.238
+```
+
+### Server Documentation
+Full deployment docs on server: `/home/ec2-user/taskschedule/AWS_DEPLOYMENT.md`
+
+### Nginx Config
+Already configured in `/etc/nginx/conf.d/subdomains.conf` to proxy to port 3001.
+
+### To Deploy
+1. Copy app to `/home/ec2-user/tifootball/`
+2. Run server on port 3001 (update server/index.js PORT)
+3. Create systemd service (use `/etc/systemd/system/taskschedule.service` as template)
+4. Enable and start: `sudo systemctl enable --now tifootball`
+
 ---
 
 ## IMPORTANT: Season Setup Checklist
