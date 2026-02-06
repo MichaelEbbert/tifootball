@@ -18,7 +18,7 @@ const firstNames = JSON.parse(
 )
 
 // Database path
-const dbDir = join(__dirname, 'db')
+const dbDir = join(__dirname, '..', 'data')
 const dbPath = join(dbDir, 'tifootball.db')
 
 // Ensure db directory exists

@@ -17,7 +17,7 @@ const { initializeGame, executePlay, isGameOver } = await import(gameEnginePath)
 
 // Load teams from database
 async function loadTeamsFromDatabase() {
-  const dbPath = join(__dirname, 'db', 'tifootball.db')
+  const dbPath = join(__dirname, '..', 'data', 'tifootball.db')
   if (!existsSync(dbPath)) {
     console.log('Database not found!')
     process.exit(1)

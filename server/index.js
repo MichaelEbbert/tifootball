@@ -27,7 +27,7 @@ const firstNames = JSON.parse(
 )
 
 // Database path
-const dbPath = join(__dirname, 'db', 'tifootball.db')
+const dbPath = join(__dirname, '..', 'data', 'tifootball.db')
 
 // Initialize SQLite database
 let db

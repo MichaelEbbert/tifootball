@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const dbPath = join(__dirname, 'db', 'tifootball.db')
+const dbPath = join(__dirname, '..', 'data', 'tifootball.db')
 
 // Helper function to run a query and get all results
 function queryAll(db, sql, params = []) {

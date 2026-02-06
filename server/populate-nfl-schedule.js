@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const dbPath = join(__dirname, 'db', 'tifootball.db')
+const dbPath = join(__dirname, '..', 'data', 'tifootball.db')
 const mhtmlPath = join(__dirname, 'data', 'raw', 'nfl_2025_schedule.mhtml')
 
 // Team name to ID mapping
