@@ -17,11 +17,19 @@ Full deployment docs on server: `/home/ec2-user/taskschedule/AWS_DEPLOYMENT.md`
 ### Nginx Config
 Already configured in `/etc/nginx/conf.d/subdomains.conf` to proxy to port 3001.
 
-### To Deploy
-1. Copy app to `/home/ec2-user/tifootball/`
-2. Run server on port 3001 (update server/index.js PORT)
-3. Create systemd service (use `/etc/systemd/system/taskschedule.service` as template)
-4. Enable and start: `sudo systemctl enable --now tifootball`
+### Deploy
+
+Use the centralized deployment scripts in `C:\claude_projects\deployment-manager\`:
+
+```bash
+cd C:\claude_projects\deployment-manager
+python deploy.py tifootball       # Full deploy (build + sync + deps + restart)
+python status.py tifootball       # Health check
+python restart.py tifootball      # Quick restart
+python logs.py tifootball -f      # Follow logs
+```
+
+Note: `deploy.py` automatically runs `npm run build` in `client/` before syncing.
 
 ### Nginx Authentication
 See `C:\claude_projects\recipeshoppinglist\CLAUDE.md` for instructions on nginx-level auth to protect all deployed apps.
